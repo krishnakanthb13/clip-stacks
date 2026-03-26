@@ -17,7 +17,7 @@ import sys
 import subprocess
 import shutil
 import argparse
-import time
+import threading
 from pathlib import Path
 
 # ── Optional tkinter GUI ──────────────────────────────────────────────────────
@@ -131,6 +131,53 @@ def find_mpv() -> str:
         "  macOS   : brew install mpv\n"
         "  Linux   : sudo apt install mpv  (or your distro's package manager)"
     )
+
+
+def get_video_duration(video_path: str) -> float | None:
+    """
+    Get the duration of a video file in seconds.
+    Tries ffprobe first (fast, precise), falls back to mpv.
+    Returns None if duration cannot be determined.
+    """
+    if not os.path.isfile(video_path):
+        return None
+
+    # --- Try ffprobe (usually comes with ffmpeg) ---
+    ffprobe = shutil.which("ffprobe") or shutil.which("ffprobe.exe")
+    if ffprobe:
+        try:
+            result = subprocess.run(
+                [ffprobe, "-v", "error",
+                 "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1",
+                 video_path],
+                capture_output=True, text=True, timeout=15,
+                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return float(result.stdout.strip())
+        except (ValueError, subprocess.TimeoutExpired, OSError):
+            pass
+
+    # --- Fallback: use mpv to get duration ---
+    try:
+        mpv = find_mpv()
+        result = subprocess.run(
+            [mpv, video_path,
+             "--vo=null", "--ao=null", "--frames=1",
+             "--quiet",
+             "--term-playing-msg=CLIPSTACKS_DUR:${duration}"],
+            capture_output=True, text=True, timeout=15,
+            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("CLIPSTACKS_DUR:"):
+                dur_str = line.split(":", 1)[1].strip()
+                return float(dur_str)
+    except (FileNotFoundError, ValueError, subprocess.TimeoutExpired, OSError):
+        pass
+
+    return None
 
 
 def play_profile(profile: dict, start_index: int = 0, verbose: bool = True):
@@ -361,23 +408,34 @@ def gui_main():
 
 
 class ClipStacksApp:
-    BG      = "#0f0f12"
-    FG      = "#e8e4d9"
-    ACCENT  = "#f5a623"
-    DIM     = "#555555"
-    GREEN   = "#5dba6e"
-    RED     = "#e05252"
-    FONT    = ("Courier New", 10)
-    BOLD    = ("Courier New", 10, "bold")
-    TITLE_F = ("Courier New", 16, "bold")
+    BG       = "#0d0d11"
+    BG2      = "#151519"
+    CARD     = "#1a1a22"
+    FG       = "#e8e4d9"
+    ACCENT   = "#f5a623"
+    ACCENT2  = "#ffb84d"
+    DIM      = "#6b6b7b"
+    GREEN    = "#4ecd73"
+    RED      = "#e05252"
+    BLUE     = "#5b9bd5"
+    BTN_BG   = "#1e1e28"
+    BTN_HOVER = "#2c2c3a"
+    BORDER   = "#2a2a35"
+    FONT     = ("Segoe UI", 10)
+    FONT_SM  = ("Segoe UI", 9)
+    BOLD     = ("Segoe UI", 10, "bold")
+    TITLE_F  = ("Segoe UI", 18, "bold")
+    MONO     = ("Consolas", 10)
 
     def __init__(self, root):
         self.root = root
-        self.root.title("Clip Stacks 🎬💪")
+        self.root.title("Clip Stacks")
         self.root.configure(bg=self.BG)
-        self.root.geometry("920x640")
+        self.root.geometry("980x700")
+        self.root.minsize(800, 550)
         self.root.resizable(True, True)
         self.current_profile = None
+        self._original_profile_name = None  # Track renames
         self._build_ui()
         self._refresh_profiles()
 
@@ -386,100 +444,141 @@ class ClipStacksApp:
     def _build_ui(self):
         # ── Header ──
         hdr = tk.Frame(self.root, bg=self.BG)
-        hdr.pack(fill="x", padx=20, pady=(18, 0))
-        tk.Label(hdr, text="Clip Stacks", font=self.TITLE_F,
-                 fg=self.ACCENT, bg=self.BG).pack(side="left")
-        tk.Label(hdr, text="  stream your highlights. no fluff.",
-                 font=self.FONT, fg=self.DIM, bg=self.BG).pack(side="left", pady=4)
+        hdr.pack(fill="x", padx=24, pady=(16, 0))
+        tk.Label(hdr, text="🎬", font=("Segoe UI", 22),
+                 bg=self.BG).pack(side="left", padx=(0, 6))
+        title_col = tk.Frame(hdr, bg=self.BG)
+        title_col.pack(side="left")
+        tk.Label(title_col, text="Clip Stacks", font=self.TITLE_F,
+                 fg=self.ACCENT, bg=self.BG).pack(anchor="w")
+        tk.Label(title_col, text="Stream your highlights. No fluff.",
+                 font=self.FONT_SM, fg=self.DIM, bg=self.BG).pack(anchor="w")
 
-        tk.Frame(self.root, bg=self.ACCENT, height=1).pack(fill="x", padx=20, pady=8)
+        # Version badge
+        ver = tk.Label(hdr, text=" v1.0 ", font=self.FONT_SM,
+                       fg=self.ACCENT, bg=self.BORDER)
+        ver.pack(side="right", padx=4)
 
-        pane = tk.PanedWindow(self.root, orient="horizontal",
-                              bg=self.BG, sashwidth=4, sashrelief="flat")
-        pane.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        # Accent line
+        tk.Frame(self.root, bg=self.ACCENT, height=2).pack(fill="x", padx=24, pady=(10, 0))
+        tk.Frame(self.root, bg=self.BORDER, height=1).pack(fill="x", padx=24)
+
+        # ── Main content ──
+        main = tk.Frame(self.root, bg=self.BG)
+        main.pack(fill="both", expand=True, padx=12, pady=(8, 0))
 
         # ── Left: profile list ──
-        left = tk.Frame(pane, bg=self.BG, width=210)
-        pane.add(left, minsize=160)
+        left = tk.Frame(main, bg=self.BG2, width=220)
+        left.pack(side="left", fill="y", padx=(8, 4), pady=4)
+        left.pack_propagate(False)
 
-        tk.Label(left, text="PROFILES", font=self.BOLD,
-                 fg=self.DIM, bg=self.BG).pack(anchor="w", padx=8, pady=(6,2))
+        lbl_row = tk.Frame(left, bg=self.BG2)
+        lbl_row.pack(fill="x", padx=10, pady=(10, 4))
+        tk.Label(lbl_row, text="PROFILES", font=self.BOLD,
+                 fg=self.DIM, bg=self.BG2).pack(side="left")
+        self.profile_count_lbl = tk.Label(lbl_row, text="0", font=self.FONT_SM,
+                                          fg=self.ACCENT, bg=self.BORDER, padx=6)
+        self.profile_count_lbl.pack(side="right")
 
-        self.profile_lb = tk.Listbox(left, bg="#1a1a20", fg=self.FG,
+        self.profile_lb = tk.Listbox(left, bg=self.CARD, fg=self.FG,
                                      selectbackground=self.ACCENT,
                                      selectforeground=self.BG,
                                      font=self.FONT, borderwidth=0,
-                                     highlightthickness=0, activestyle="none")
-        self.profile_lb.pack(fill="both", expand=True, padx=8)
+                                     highlightthickness=1,
+                                     highlightbackground=self.BORDER,
+                                     highlightcolor=self.ACCENT,
+                                     activestyle="none",
+                                     relief="flat")
+        self.profile_lb.pack(fill="both", expand=True, padx=10, pady=(0, 6))
         self.profile_lb.bind("<<ListboxSelect>>", self._on_profile_select)
 
-        btn_row = tk.Frame(left, bg=self.BG)
-        btn_row.pack(fill="x", padx=8, pady=6)
-        self._btn(btn_row, "+ New", self._new_profile).pack(side="left")
-        self._btn(btn_row, "✕ Del", self._delete_profile, color=self.RED).pack(side="right")
+        btn_row = tk.Frame(left, bg=self.BG2)
+        btn_row.pack(fill="x", padx=10, pady=(0, 10))
+        self._btn(btn_row, "+ New", self._new_profile, color=self.GREEN).pack(side="left", fill="x", expand=True, padx=(0, 3))
+        self._btn(btn_row, "✕ Del", self._delete_profile, color=self.RED).pack(side="right", fill="x", expand=True, padx=(3, 0))
 
         # ── Right: profile editor ──
-        right = tk.Frame(pane, bg=self.BG)
-        pane.add(right, minsize=500)
+        right = tk.Frame(main, bg=self.BG)
+        right.pack(side="left", fill="both", expand=True, padx=(4, 8), pady=4)
 
         # Profile name / desc
         info = tk.Frame(right, bg=self.BG)
-        info.pack(fill="x", padx=8, pady=4)
+        info.pack(fill="x", padx=8, pady=(4, 2))
         self.name_var = tk.StringVar()
         self.desc_var = tk.StringVar()
-        tk.Label(info, text="Name:", font=self.BOLD, fg=self.DIM, bg=self.BG).grid(row=0, column=0, sticky="w")
-        tk.Entry(info, textvariable=self.name_var, bg="#1a1a20", fg=self.ACCENT,
+        tk.Label(info, text="Name", font=self.BOLD, fg=self.DIM, bg=self.BG).grid(row=0, column=0, sticky="w", padx=(0, 8))
+        tk.Entry(info, textvariable=self.name_var, bg=self.CARD, fg=self.ACCENT,
                  font=self.BOLD, insertbackground=self.ACCENT, borderwidth=0,
                  highlightthickness=1, highlightcolor=self.ACCENT,
-                 highlightbackground="#333").grid(row=0, column=1, sticky="ew", padx=6)
-        tk.Label(info, text="Desc:", font=self.FONT, fg=self.DIM, bg=self.BG).grid(row=1, column=0, sticky="w")
-        tk.Entry(info, textvariable=self.desc_var, bg="#1a1a20", fg=self.FG,
+                 highlightbackground=self.BORDER).grid(row=0, column=1, sticky="ew", padx=4, pady=3)
+        tk.Label(info, text="Desc", font=self.FONT, fg=self.DIM, bg=self.BG).grid(row=1, column=0, sticky="w", padx=(0, 8))
+        tk.Entry(info, textvariable=self.desc_var, bg=self.CARD, fg=self.FG,
                  font=self.FONT, insertbackground=self.FG, borderwidth=0,
                  highlightthickness=1, highlightcolor=self.ACCENT,
-                 highlightbackground="#333").grid(row=1, column=1, sticky="ew", padx=6)
+                 highlightbackground=self.BORDER).grid(row=1, column=1, sticky="ew", padx=4, pady=3)
         info.columnconfigure(1, weight=1)
 
-        tk.Frame(right, bg="#222228", height=1).pack(fill="x", padx=8, pady=4)
+        tk.Frame(right, bg=self.BORDER, height=1).pack(fill="x", padx=8, pady=6)
 
-        # Segment list
-        tk.Label(right, text="SEGMENTS", font=self.BOLD,
-                 fg=self.DIM, bg=self.BG).pack(anchor="w", padx=8)
+        # Segment header with count + duration
+        seg_hdr = tk.Frame(right, bg=self.BG)
+        seg_hdr.pack(fill="x", padx=8)
+        tk.Label(seg_hdr, text="SEGMENTS", font=self.BOLD,
+                 fg=self.DIM, bg=self.BG).pack(side="left")
+        self.seg_count_lbl = tk.Label(seg_hdr, text="0 clips", font=self.FONT_SM,
+                                      fg=self.BLUE, bg=self.BG)
+        self.seg_count_lbl.pack(side="left", padx=(8, 0))
+        self.total_dur_lbl = tk.Label(seg_hdr, text="", font=self.FONT_SM,
+                                      fg=self.DIM, bg=self.BG)
+        self.total_dur_lbl.pack(side="right")
 
-        cols = ("label", "start", "end", "dur", "file")
-        self.seg_tree = ttk.Treeview(right, columns=cols, show="headings",
+        # Treeview + scrollbar in a shared frame (fixes scrollbar detachment bug)
+        tree_frame = tk.Frame(right, bg=self.BG)
+        tree_frame.pack(fill="both", expand=True, padx=8, pady=(4, 0))
+
+        cols = ("#", "label", "start", "end", "dur", "file")
+        self.seg_tree = ttk.Treeview(tree_frame, columns=cols, show="headings",
                                      height=10, selectmode="browse")
         style = ttk.Style()
         style.theme_use("default")
         style.configure("Treeview",
-                        background="#1a1a20", foreground=self.FG,
-                        fieldbackground="#1a1a20", borderwidth=0,
-                        rowheight=24, font=self.FONT)
+                        background=self.CARD, foreground=self.FG,
+                        fieldbackground=self.CARD, borderwidth=0,
+                        rowheight=26, font=self.FONT)
         style.configure("Treeview.Heading",
-                        background="#0f0f12", foreground=self.ACCENT,
-                        borderwidth=0, font=self.BOLD)
-        style.map("Treeview", background=[("selected", "#2a2a35")])
+                        background=self.BG2, foreground=self.ACCENT,
+                        borderwidth=0, font=self.BOLD,
+                        relief="flat", padding=(4, 4))
+        style.map("Treeview",
+                  background=[("selected", "#2a2a3d")],
+                  foreground=[("selected", self.ACCENT2)])
+        style.map("Treeview.Heading",
+                  background=[("active", self.BORDER)])
 
+        self.seg_tree.heading("#",     text="#")
         self.seg_tree.heading("label", text="Label")
         self.seg_tree.heading("start", text="Start")
         self.seg_tree.heading("end",   text="End")
-        self.seg_tree.heading("dur",   text="Dur")
+        self.seg_tree.heading("dur",   text="Duration")
         self.seg_tree.heading("file",  text="File")
+        self.seg_tree.column("#",     width=36,  anchor="center", stretch=False)
         self.seg_tree.column("label", width=180)
-        self.seg_tree.column("start", width=70, anchor="center")
-        self.seg_tree.column("end",   width=70, anchor="center")
-        self.seg_tree.column("dur",   width=60, anchor="center")
-        self.seg_tree.column("file",  width=220)
+        self.seg_tree.column("start", width=70,  anchor="center")
+        self.seg_tree.column("end",   width=70,  anchor="center")
+        self.seg_tree.column("dur",   width=70,  anchor="center")
+        self.seg_tree.column("file",  width=200)
 
-        sb = ttk.Scrollbar(right, orient="vertical", command=self.seg_tree.yview)
+        sb = ttk.Scrollbar(tree_frame, orient="vertical", command=self.seg_tree.yview)
         self.seg_tree.configure(yscrollcommand=sb.set)
-        self.seg_tree.pack(fill="both", expand=True, padx=8)
+        self.seg_tree.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
 
         # Segment add form
         form = tk.LabelFrame(right, text=" Add Segment ",
                              fg=self.ACCENT, bg=self.BG, font=self.FONT,
-                             borderwidth=1, relief="solid")
-        form.pack(fill="x", padx=8, pady=6)
+                             borderwidth=1, relief="groove",
+                             highlightbackground=self.BORDER, highlightthickness=1)
+        form.pack(fill="x", padx=8, pady=(8, 4))
 
         self.seg_file  = tk.StringVar()
         self.seg_start = tk.StringVar()
@@ -487,68 +586,78 @@ class ClipStacksApp:
         self.seg_label = tk.StringVar()
 
         def lbl(t, r, c): tk.Label(form, text=t, font=self.FONT,
-                                   fg=self.DIM, bg=self.BG).grid(row=r, column=c, sticky="w", padx=4, pady=2)
+                                   fg=self.DIM, bg=self.BG).grid(row=r, column=c, sticky="w", padx=4, pady=3)
         def ent(var, r, c, w=14): tk.Entry(form, textvariable=var, width=w,
-                                           bg="#1a1a20", fg=self.FG, insertbackground=self.FG,
-                                           font=self.FONT, borderwidth=0,
+                                           bg=self.CARD, fg=self.FG, insertbackground=self.FG,
+                                           font=self.MONO, borderwidth=0,
                                            highlightthickness=1, highlightcolor=self.ACCENT,
-                                           highlightbackground="#333").grid(row=r, column=c, padx=4, pady=2, sticky="ew")
+                                           highlightbackground=self.BORDER).grid(row=r, column=c, padx=4, pady=3, sticky="ew")
         lbl("Video file:", 0, 0)
-        fe = tk.Entry(form, textvariable=self.seg_file, bg="#1a1a20", fg=self.FG,
+        fe = tk.Entry(form, textvariable=self.seg_file, bg=self.CARD, fg=self.FG,
                       font=self.FONT, insertbackground=self.FG, borderwidth=0,
                       highlightthickness=1, highlightcolor=self.ACCENT,
-                      highlightbackground="#333")
-        fe.grid(row=0, column=1, columnspan=3, sticky="ew", padx=4, pady=2)
-        self._btn(form, "Browse", self._browse_video).grid(row=0, column=4, padx=4)
+                      highlightbackground=self.BORDER)
+        fe.grid(row=0, column=1, columnspan=3, sticky="ew", padx=4, pady=3)
+        self._btn(form, "📁 Browse", self._browse_video).grid(row=0, column=4, padx=4)
 
-        lbl("Start (M:SS):", 1, 0); ent(self.seg_start, 1, 1, 10)
-        lbl("End   (M:SS):", 1, 2); ent(self.seg_end,   1, 3, 10)
-        lbl("Label (opt):", 2, 0)
-        tk.Entry(form, textvariable=self.seg_label, bg="#1a1a20", fg=self.FG,
+        lbl("Start:", 1, 0); ent(self.seg_start, 1, 1, 10)
+        lbl("End:",   1, 2); ent(self.seg_end,   1, 3, 10)
+        self._btn(form, "⟳ Sync", self._sync_times, color=self.BLUE).grid(row=1, column=4, padx=4)
+        lbl("Label:", 2, 0)
+        tk.Entry(form, textvariable=self.seg_label, bg=self.CARD, fg=self.FG,
                  font=self.FONT, insertbackground=self.FG, borderwidth=0,
                  highlightthickness=1, highlightcolor=self.ACCENT,
-                 highlightbackground="#333").grid(row=2, column=1, columnspan=3,
-                                                   sticky="ew", padx=4, pady=2)
+                 highlightbackground=self.BORDER).grid(row=2, column=1, columnspan=3,
+                                                   sticky="ew", padx=4, pady=3)
         form.columnconfigure(1, weight=1)
 
         add_row = tk.Frame(form, bg=self.BG)
-        add_row.grid(row=3, column=0, columnspan=5, pady=4, padx=4, sticky="w")
+        add_row.grid(row=3, column=0, columnspan=5, pady=6, padx=4, sticky="w")
         self._btn(add_row, "+ Add Segment", self._add_segment, color=self.GREEN).pack(side="left", padx=2)
-        self._btn(add_row, "✕ Remove Selected", self._remove_segment, color=self.RED).pack(side="left", padx=2)
-        self._btn(add_row, "↑ Move Up", self._move_up).pack(side="left", padx=2)
-        self._btn(add_row, "↓ Move Down", self._move_down).pack(side="left", padx=2)
+        self._btn(add_row, "✕ Remove", self._remove_segment, color=self.RED).pack(side="left", padx=2)
+        self._btn(add_row, "↑ Up", self._move_up).pack(side="left", padx=2)
+        self._btn(add_row, "↓ Down", self._move_down).pack(side="left", padx=2)
 
-        # Bottom buttons
-        tk.Frame(right, bg="#222228", height=1).pack(fill="x", padx=8, pady=4)
+        # Bottom action bar
+        tk.Frame(right, bg=self.BORDER, height=1).pack(fill="x", padx=8, pady=4)
         bot = tk.Frame(right, bg=self.BG)
-        bot.pack(fill="x", padx=8, pady=(0, 8))
-        self._btn(bot, "💾 Save Profile", self._save_profile, color=self.ACCENT).pack(side="left", padx=4)
-        self._btn(bot, "▶ Play Profile", self._play_profile, color=self.GREEN, large=True).pack(side="left", padx=4)
-        self._btn(bot, "▶ Play from Selected", self._play_from_selected).pack(side="left", padx=4)
+        bot.pack(fill="x", padx=8, pady=(0, 6))
+        self._btn(bot, "💾 Save", self._save_profile, color=self.ACCENT).pack(side="left", padx=4)
+        self._btn(bot, "▶ Play All", self._play_profile, color=self.GREEN, large=True).pack(side="left", padx=4)
+        self._btn(bot, "▶ Play from Selected", self._play_from_selected, color=self.BLUE).pack(side="left", padx=4)
 
         # Status bar
-        self.status_var = tk.StringVar(value="Ready.")
-        tk.Label(self.root, textvariable=self.status_var,
-                 font=self.FONT, fg=self.DIM, bg=self.BG,
-                 anchor="w").pack(fill="x", padx=14, pady=(0, 6))
+        status_frame = tk.Frame(self.root, bg=self.BG2, height=28)
+        status_frame.pack(fill="x", side="bottom")
+        status_frame.pack_propagate(False)
+        self.status_var = tk.StringVar(value="Ready — select or create a profile to begin.")
+        tk.Label(status_frame, textvariable=self.status_var,
+                 font=self.FONT_SM, fg=self.DIM, bg=self.BG2,
+                 anchor="w").pack(fill="x", padx=16, pady=4)
 
     # ── Widget helper ─────────────────────────────────────────────────────────
 
     def _btn(self, parent, text, cmd, color=None, large=False):
         c = color or self.FG
-        f = ("Courier New", 10, "bold") if large else self.FONT
-        return tk.Button(parent, text=text, command=cmd,
-                         bg="#1e1e26", fg=c, activebackground="#2a2a38",
-                         activeforeground=c, font=f, borderwidth=0,
-                         padx=10, pady=4, cursor="hand2",
-                         highlightthickness=1, highlightbackground="#333")
+        f = ("Segoe UI", 11, "bold") if large else self.FONT
+        btn = tk.Button(parent, text=text, command=cmd,
+                        bg=self.BTN_BG, fg=c, activebackground=self.BTN_HOVER,
+                        activeforeground=c, font=f, borderwidth=0,
+                        padx=12, pady=5, cursor="hand2",
+                        highlightthickness=1, highlightbackground=self.BORDER)
+        # Hover effect
+        btn.bind("<Enter>", lambda e, b=btn: b.configure(bg=self.BTN_HOVER))
+        btn.bind("<Leave>", lambda e, b=btn: b.configure(bg=self.BTN_BG))
+        return btn
 
     # ── Profile helpers ───────────────────────────────────────────────────────
 
     def _refresh_profiles(self):
         self.profile_lb.delete(0, "end")
-        for name in list_profiles():
+        names = list_profiles()
+        for name in names:
             self.profile_lb.insert("end", f"  {name}")
+        self.profile_count_lbl.config(text=str(len(names)))
 
     def _on_profile_select(self, _=None):
         sel = self.profile_lb.curselection()
@@ -557,6 +666,7 @@ class ClipStacksApp:
         name = self.profile_lb.get(sel[0]).strip()
         try:
             self.current_profile = load_profile(name)
+            self._original_profile_name = name  # Track for rename detection
             self.name_var.set(self.current_profile["name"])
             self.desc_var.set(self.current_profile.get("description", ""))
             self._refresh_segments()
@@ -595,29 +705,45 @@ class ClipStacksApp:
         if not self.current_profile:
             messagebox.showwarning("No profile", "Select or create a profile first.")
             return
-        self.current_profile["name"] = self.name_var.get().strip()
+        new_name = self.name_var.get().strip()
+        # Handle rename: delete old file if the name changed
+        if self._original_profile_name and new_name != self._original_profile_name:
+            old_path = profile_path(self._original_profile_name)
+            if old_path.exists():
+                old_path.unlink()
+        self.current_profile["name"] = new_name
         self.current_profile["description"] = self.desc_var.get().strip()
-        save_profile(self.current_profile["name"], self.current_profile)
+        save_profile(new_name, self.current_profile)
+        self._original_profile_name = new_name  # Update tracker
         self._refresh_profiles()
-        self.status(f"Saved: {self.current_profile['name']}")
+        self.status(f"Saved: {new_name}")
 
     # ── Segment helpers ───────────────────────────────────────────────────────
 
     def _refresh_segments(self):
         self.seg_tree.delete(*self.seg_tree.get_children())
         if not self.current_profile:
+            self.seg_count_lbl.config(text="0 clips")
+            self.total_dur_lbl.config(text="")
             return
-        for s in self.current_profile.get("segments", []):
+        segs = self.current_profile.get("segments", [])
+        total_dur = 0
+        for i, s in enumerate(segs, 1):
             dur = s["end"] - s["start"]
+            total_dur += dur
             fname = Path(s["video"]).name
             exists = "✅" if os.path.isfile(s["video"]) else "❌"
             self.seg_tree.insert("", "end", values=(
+                f"{i}",
                 s.get("label", ""),
                 fmt_time(s["start"]),
                 fmt_time(s["end"]),
                 fmt_time(dur),
                 f"{exists} {fname}"
             ))
+        n = len(segs)
+        self.seg_count_lbl.config(text=f"{n} clip{'s' if n != 1 else ''}")
+        self.total_dur_lbl.config(text=f"Total: {fmt_time(total_dur)}" if n else "")
 
     def _browse_video(self):
         f = filedialog.askopenfilename(
@@ -627,6 +753,40 @@ class ClipStacksApp:
         )
         if f:
             self.seg_file.set(f)
+            self._auto_fill_times(f)
+
+    def _auto_fill_times(self, video_path: str):
+        """Fill start=0:00 and end=<duration> in a background thread."""
+        self.seg_start.set("0:00")
+        self.seg_end.set("...")
+        self.status(f"⏳ Reading duration for {Path(video_path).name}...")
+
+        def detect():
+            dur = get_video_duration(video_path)
+            # Schedule GUI update on main thread
+            self.root.after(0, lambda: self._on_duration_detected(dur, video_path))
+
+        threading.Thread(target=detect, daemon=True).start()
+
+    def _on_duration_detected(self, dur: float | None, video_path: str):
+        """Called on the main thread after duration detection completes."""
+        if dur is not None:
+            self.seg_end.set(fmt_time(dur))
+            self.status(f"✅ {Path(video_path).name} — {fmt_time(dur)} total")
+        else:
+            self.seg_end.set("")
+            self.status(f"⚠️ Could not read duration for {Path(video_path).name}")
+
+    def _sync_times(self):
+        """Manually sync start/end to 0:00 and video duration."""
+        video = self.seg_file.get().strip()
+        if not video:
+            messagebox.showinfo("No video", "Select a video file first.")
+            return
+        if not os.path.isfile(video):
+            messagebox.showerror("Not found", f"File not found:\n{video}")
+            return
+        self._auto_fill_times(video)
 
     def _add_segment(self):
         if not self.current_profile:
@@ -707,7 +867,6 @@ class ClipStacksApp:
             messagebox.showerror("mpv not found", str(e))
             return
         self._save_profile()
-        import threading
         def run():
             play_profile(self.current_profile, start_index=start_idx)
         threading.Thread(target=run, daemon=True).start()
