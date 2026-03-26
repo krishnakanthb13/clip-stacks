@@ -107,18 +107,27 @@ def new_profile(name: str) -> dict:
     return {"name": name, "description": "", "segments": []}
 
 
+def create_segment(video: str, start_sec: float, end_sec: float, label: str = "") -> dict:
+    """Validate times and return a standard segment dictionary."""
+    if not video:
+        raise ValueError("Video file is required.")
+    if end_sec <= start_sec:
+        raise ValueError("End time must be after start time.")
+    
+    return {
+        "video": os.path.abspath(video),
+        "start": start_sec,
+        "end":   end_sec,
+        "label": label or f"{Path(video).stem}  {fmt_time(start_sec)}–{fmt_time(end_sec)}"
+    }
+
+
 def add_segment(profile: dict, video: str, start: str, end: str, label: str = ""):
-    """Append a segment entry; validates timestamps."""
+    """Append a segment entry; validates timestamps. (CLI wrapper)"""
     s = parse_time(start)
     e = parse_time(end)
-    if e <= s:
-        raise ValueError(f"End ({end}) must be after start ({start})")
-    profile["segments"].append({
-        "video": os.path.abspath(video),
-        "start": s,
-        "end":   e,
-        "label": label or f"{Path(video).stem}  {fmt_time(s)}–{fmt_time(e)}"
-    })
+    seg = create_segment(video, s, e, label)
+    profile["segments"].append(seg)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -494,12 +503,12 @@ class ClipStacksApp:
 
     # ── Layout ────────────────────────────────────────────────────────────────
 
-    def _build_ui(self):
-        # ── Header ──
+    def _build_header(self):
         hdr = tk.Frame(self.root, bg=self.BG)
         hdr.pack(fill="x", padx=24, pady=(16, 0))
         tk.Label(hdr, text="🎬", font=("Segoe UI", 22),
                  bg=self.BG).pack(side="left", padx=(0, 6))
+        
         title_col = tk.Frame(hdr, bg=self.BG)
         title_col.pack(side="left")
         tk.Label(title_col, text="Clip Stacks", font=self.TITLE_F,
@@ -507,21 +516,15 @@ class ClipStacksApp:
         tk.Label(title_col, text="Stream your highlights. No fluff.",
                  font=self.FONT_SM, fg=self.DIM, bg=self.BG).pack(anchor="w")
 
-        # Version badge
         ver = tk.Label(hdr, text=f" v{VERSION} ", font=self.FONT_SM,
                        fg=self.ACCENT, bg=self.BORDER)
         ver.pack(side="right", padx=4)
 
-        # Accent line
         tk.Frame(self.root, bg=self.ACCENT, height=2).pack(fill="x", padx=24, pady=(10, 0))
         tk.Frame(self.root, bg=self.BORDER, height=1).pack(fill="x", padx=24)
 
-        # ── Main content ──
-        main = tk.Frame(self.root, bg=self.BG)
-        main.pack(fill="both", expand=True, padx=12, pady=(8, 0))
-
-        # ── Left: profile list ──
-        left = tk.Frame(main, bg=self.BG2, width=220)
+    def _build_sidebar(self, parent):
+        left = tk.Frame(parent, bg=self.BG2, width=220)
         left.pack(side="left", fill="y", padx=(8, 4), pady=4)
         left.pack_propagate(False)
 
@@ -529,6 +532,7 @@ class ClipStacksApp:
         lbl_row.pack(fill="x", padx=10, pady=(10, 4))
         tk.Label(lbl_row, text="PROFILES", font=self.BOLD,
                  fg=self.DIM, bg=self.BG2).pack(side="left")
+        
         self.profile_count_lbl = tk.Label(lbl_row, text="0", font=self.FONT_SM,
                                           fg=self.ACCENT, bg=self.BORDER, padx=6)
         self.profile_count_lbl.pack(side="right")
@@ -550,20 +554,19 @@ class ClipStacksApp:
         self._btn(btn_row, "+ New", self._new_profile, color=self.GREEN).pack(side="left", fill="x", expand=True, padx=(0, 3))
         self._btn(btn_row, "✕ Del", self._delete_profile, color=self.RED).pack(side="right", fill="x", expand=True, padx=(3, 0))
 
-        # ── Right: profile editor ──
-        right = tk.Frame(main, bg=self.BG)
-        right.pack(side="left", fill="both", expand=True, padx=(4, 8), pady=4)
-
-        # Profile name / desc
-        info = tk.Frame(right, bg=self.BG)
+    def _build_editor_info(self, parent):
+        info = tk.Frame(parent, bg=self.BG)
         info.pack(fill="x", padx=8, pady=(4, 2))
+        
         self.name_var = tk.StringVar()
         self.desc_var = tk.StringVar()
+        
         tk.Label(info, text="Name", font=self.BOLD, fg=self.DIM, bg=self.BG).grid(row=0, column=0, sticky="w", padx=(0, 8))
         tk.Entry(info, textvariable=self.name_var, bg=self.CARD, fg=self.ACCENT,
                  font=self.BOLD, insertbackground=self.ACCENT, borderwidth=0,
                  highlightthickness=1, highlightcolor=self.ACCENT,
                  highlightbackground=self.BORDER).grid(row=0, column=1, sticky="ew", padx=4, pady=3)
+        
         tk.Label(info, text="Desc", font=self.FONT, fg=self.DIM, bg=self.BG).grid(row=1, column=0, sticky="w", padx=(0, 8))
         tk.Entry(info, textvariable=self.desc_var, bg=self.CARD, fg=self.FG,
                  font=self.FONT, insertbackground=self.FG, borderwidth=0,
@@ -571,27 +574,29 @@ class ClipStacksApp:
                  highlightbackground=self.BORDER).grid(row=1, column=1, sticky="ew", padx=4, pady=3)
         info.columnconfigure(1, weight=1)
 
-        tk.Frame(right, bg=self.BORDER, height=1).pack(fill="x", padx=8, pady=6)
-
-        # Segment header with count + duration
-        seg_hdr = tk.Frame(right, bg=self.BG)
+    def _build_segment_table(self, parent):
+        # Header with count + duration
+        seg_hdr = tk.Frame(parent, bg=self.BG)
         seg_hdr.pack(fill="x", padx=8)
         tk.Label(seg_hdr, text="SEGMENTS", font=self.BOLD,
                  fg=self.DIM, bg=self.BG).pack(side="left")
+        
         self.seg_count_lbl = tk.Label(seg_hdr, text="0 clips", font=self.FONT_SM,
                                       fg=self.BLUE, bg=self.BG)
         self.seg_count_lbl.pack(side="left", padx=(8, 0))
+        
         self.total_dur_lbl = tk.Label(seg_hdr, text="", font=self.FONT_SM,
                                       fg=self.DIM, bg=self.BG)
         self.total_dur_lbl.pack(side="right")
 
-        # Treeview + scrollbar in a shared frame (fixes scrollbar detachment bug)
-        tree_frame = tk.Frame(right, bg=self.BG)
+        # Treeview + scrollbar
+        tree_frame = tk.Frame(parent, bg=self.BG)
         tree_frame.pack(fill="both", expand=True, padx=8, pady=(4, 0))
 
         cols = ("#", "label", "start", "end", "dur", "file")
         self.seg_tree = ttk.Treeview(tree_frame, columns=cols, show="headings",
                                      height=10, selectmode="browse")
+        
         style = ttk.Style()
         style.theme_use("default")
         style.configure("Treeview",
@@ -614,6 +619,7 @@ class ClipStacksApp:
         self.seg_tree.heading("end",   text="End")
         self.seg_tree.heading("dur",   text="Duration")
         self.seg_tree.heading("file",  text="File")
+        
         self.seg_tree.column("#",     width=36,  anchor="center", stretch=False)
         self.seg_tree.column("label", width=180)
         self.seg_tree.column("start", width=70,  anchor="center")
@@ -627,9 +633,10 @@ class ClipStacksApp:
         sb.pack(side="right", fill="y")
         self.seg_tree.bind("<Double-1>", lambda e: self._edit_segment())
 
+    def _build_segment_form(self, parent):
         # Segment add/edit form
         self._edit_index = None  # None = add mode, int = edit mode
-        self.seg_form = tk.LabelFrame(right, text=" Add Segment ",
+        self.seg_form = tk.LabelFrame(parent, text=" Add Segment ",
                              fg=self.ACCENT, bg=self.BG, font=self.FONT,
                              borderwidth=1, relief="groove",
                              highlightbackground=self.BORDER, highlightthickness=1)
@@ -650,18 +657,16 @@ class ClipStacksApp:
         def lbl(t, r, c, **kw): tk.Label(form, text=t, font=self.FONT,
                                    fg=self.DIM, bg=self.BG).grid(row=r, column=c, sticky="w", padx=4, pady=3, **kw)
 
-        def make_spinbox(parent, var, from_=0, to=59):
-            sb = tk.Spinbox(parent, textvariable=var, from_=from_, to=to, width=3,
+        def make_spinbox(p, var, from_=0, to=59):
+            return tk.Spinbox(p, textvariable=var, from_=from_, to=to, width=3,
                             format="%02.0f", justify="center",
                             bg=self.CARD, fg=self.FG, insertbackground=self.FG,
                             font=self.MONO, borderwidth=0, buttonbackground=self.BG2,
                             highlightthickness=1, highlightcolor=self.ACCENT,
                             highlightbackground=self.BORDER)
-            return sb
 
-        def make_hms_row(parent, h_var, m_var, s_var):
-            """Build an H : M : S spinbox row and return the frame."""
-            frm = tk.Frame(parent, bg=self.BG)
+        def make_hms_row(p, h_var, m_var, s_var):
+            frm = tk.Frame(p, bg=self.BG)
             make_spinbox(frm, h_var, 0, 99).pack(side="left")
             tk.Label(frm, text="h", font=self.FONT_SM, fg=self.DIM, bg=self.BG).pack(side="left", padx=(1, 4))
             make_spinbox(frm, m_var, 0, 59).pack(side="left")
@@ -679,20 +684,17 @@ class ClipStacksApp:
         self._btn(form, "📁 Browse", self._browse_video).grid(row=0, column=4, padx=4)
 
         lbl("Start:", 1, 0)
-        start_hms = make_hms_row(form, self.start_h, self.start_m, self.start_s)
-        start_hms.grid(row=1, column=1, sticky="w", padx=4, pady=3)
+        make_hms_row(form, self.start_h, self.start_m, self.start_s).grid(row=1, column=1, sticky="w", padx=4, pady=3)
 
         lbl("End:", 1, 2)
-        end_hms = make_hms_row(form, self.end_h, self.end_m, self.end_s)
-        end_hms.grid(row=1, column=3, sticky="w", padx=4, pady=3)
+        make_hms_row(form, self.end_h, self.end_m, self.end_s).grid(row=1, column=3, sticky="w", padx=4, pady=3)
         self._btn(form, "⟳ Sync", self._sync_times, color=self.BLUE).grid(row=1, column=4, padx=4)
 
         lbl("Label:", 2, 0)
         tk.Entry(form, textvariable=self.seg_label, bg=self.CARD, fg=self.FG,
                  font=self.FONT, insertbackground=self.FG, borderwidth=0,
                  highlightthickness=1, highlightcolor=self.ACCENT,
-                 highlightbackground=self.BORDER).grid(row=2, column=1, columnspan=3,
-                                                   sticky="ew", padx=4, pady=3)
+                 highlightbackground=self.BORDER).grid(row=2, column=1, columnspan=3, sticky="ew", padx=4, pady=3)
         form.columnconfigure(1, weight=1)
 
         add_row = tk.Frame(form, bg=self.BG)
@@ -706,15 +708,15 @@ class ClipStacksApp:
         self._btn(add_row, "↑ Up", self._move_up).pack(side="left", padx=2)
         self._btn(add_row, "↓ Down", self._move_down).pack(side="left", padx=2)
 
-        # Bottom action bar
-        tk.Frame(right, bg=self.BORDER, height=1).pack(fill="x", padx=8, pady=4)
-        bot = tk.Frame(right, bg=self.BG)
+    def _build_bottom_actions(self, parent):
+        tk.Frame(parent, bg=self.BORDER, height=1).pack(fill="x", padx=8, pady=4)
+        bot = tk.Frame(parent, bg=self.BG)
         bot.pack(fill="x", padx=8, pady=(0, 6))
         self._btn(bot, "💾 Save", self._save_profile, color=self.ACCENT).pack(side="left", padx=4)
         self._btn(bot, "▶ Play All", self._play_profile, color=self.GREEN, large=True).pack(side="left", padx=4)
         self._btn(bot, "▶ Play from Selected", self._play_from_selected, color=self.BLUE).pack(side="left", padx=4)
 
-        # Status bar
+    def _build_status_bar(self):
         status_frame = tk.Frame(self.root, bg=self.BG2, height=28)
         status_frame.pack(fill="x", side="bottom")
         status_frame.pack_propagate(False)
@@ -722,6 +724,25 @@ class ClipStacksApp:
         tk.Label(status_frame, textvariable=self.status_var,
                  font=self.FONT_SM, fg=self.DIM, bg=self.BG2,
                  anchor="w").pack(fill="x", padx=16, pady=4)
+
+    def _build_ui(self):
+        """Clean UI assembly calling modular builder methods."""
+        self._build_header()
+        main = tk.Frame(self.root, bg=self.BG)
+        main.pack(fill="both", expand=True, padx=12, pady=(8, 0))
+
+        self._build_sidebar(main)
+        
+        right = tk.Frame(main, bg=self.BG)
+        right.pack(side="left", fill="both", expand=True, padx=(4, 8), pady=4)
+
+        self._build_editor_info(right)
+        tk.Frame(right, bg=self.BORDER, height=1).pack(fill="x", padx=8, pady=6)
+        
+        self._build_segment_table(right)
+        self._build_segment_form(right)
+        self._build_bottom_actions(right)
+        self._build_status_bar()
 
     # ── Widget helper ─────────────────────────────────────────────────────────
 
@@ -897,19 +918,10 @@ class ClipStacksApp:
         start_sec = self._get_hms(self.start_h, self.start_m, self.start_s)
         end_sec   = self._get_hms(self.end_h, self.end_m, self.end_s)
         label = self.seg_label.get().strip()
-        if not video:
-            messagebox.showerror("Missing fields", "Video file is required.")
-            return
-        if end_sec <= start_sec:
-            messagebox.showerror("Invalid times", "End time must be after start time.")
-            return
+        
         try:
-            seg_entry = {
-                "video": os.path.abspath(video),
-                "start": start_sec,
-                "end":   end_sec,
-                "label": label or f"{Path(video).stem}  {fmt_time(start_sec)}–{fmt_time(end_sec)}"
-            }
+            seg_entry = create_segment(video, start_sec, end_sec, label)
+            
             if self._edit_index is not None:
                 # Replace existing segment
                 self.current_profile["segments"][self._edit_index] = seg_entry
@@ -918,6 +930,7 @@ class ClipStacksApp:
             else:
                 self.current_profile["segments"].append(seg_entry)
                 self.status(f"Added segment. Total: {len(self.current_profile['segments'])}")
+            
             self._refresh_segments()
             self._clear_form()
         except Exception as e:
@@ -1037,4 +1050,15 @@ class ClipStacksApp:
 # ─────────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    cli_main()
+    try:
+        cli_main()
+    except Exception as e:
+        if HAS_TK:
+            import traceback
+            from tkinter import messagebox
+            msg = f"Fatal Error during startup:\n\n{str(e)}\n\n{traceback.format_exc()}"
+            print(msg)
+            messagebox.showerror("Startup Error", msg)
+        else:
+            print(f"❌  Fatal Error: {e}")
+        sys.exit(1)
