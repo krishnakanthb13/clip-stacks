@@ -11,15 +11,15 @@
 </p>
 
 <p align="center">
-  <strong>Stream your workout highlights. No re-encoding. No new files. Just your reps.</strong>
+  <strong>Stream video highlights. No re-encoding. No new files. Just your clips.</strong>
 </p>
 
-Clip Stacks lets you define timestamp-based highlight playlists across multiple video files — and play them back instantly using `mpv`. Perfect for reviewing exercise form clips before hitting the gym.
+Clip Stacks lets you define timestamp-based highlight playlists across multiple video files — and play them back instantly using `mpv`. Perfect for reviewing specific segments from lectures, game highlights, or any long-form video.
 
 ---
 
 - ✅ **No new video files created** — pure streaming via seek.
-- ✅ **Multiple profiles** — LegDay, PushDay, PullDay, etc.
+- ✅ **Multiple profiles** — categorize highlights by type.
 - ✅ **Cross-platform** — Windows, macOS, Linux.
 - ✅ **Minimalist dependencies** — just Python 3.8+ and `mpv`.
 - ✅ **GUI + CLI** — use whichever you prefer.
@@ -72,10 +72,10 @@ If you are on macOS/Linux, run:
 python clip-stacks.py --gui
 ```
 
-1. Click **+ New** → name your profile (e.g. `LegDay`)
+1. Click **+ New** → name your profile (e.g. `MovieHighlights`)
 2. In "Add Segment" → Browse for your video file
 3. Enter Start and End timestamps (`1:22`, `3:35`, `0:01:22`, etc.)
-4. Add a label like `"Squat form cue"`
+4. Add a label like `"Cool chase scene"`
 5. Repeat for more clips (different files allowed!)
 6. **💾 Save Profile** → **▶ Play Profile**
 
@@ -83,21 +83,21 @@ python clip-stacks.py --gui
 
 ```bash
 # Create a profile
-python clip-stacks.py new LegDay "Leg day form checks"
+python clip-stacks.py new Highlights "General highlights"
 
 # Add segments from different video files
-python clip-stacks.py add LegDay ~/videos/squat_session.mp4  1:22  3:35  "Squat depth cue"
-python clip-stacks.py add LegDay ~/videos/leg_press.mp4      0:45  2:10  "Leg press range"
-python clip-stacks.py add LegDay ~/videos/rdl_tutorial.mp4   5:00  7:30  "RDL hinge pattern"
+python clip-stacks.py add Highlights ~/videos/clip1.mp4  1:22  3:35  "Key segment 1"
+python clip-stacks.py add Highlights ~/videos/clip2.mp4  0:45  2:10  "Key segment 2"
+python clip-stacks.py add Highlights ~/videos/clip3.mp4  5:00  7:30  "Key segment 3"
 
 # Show what's in it
-python clip-stacks.py show LegDay
+python clip-stacks.py show Highlights
 
 # Play it
-python clip-stacks.py play LegDay
+python clip-stacks.py play Highlights
 
 # Start from segment 2
-python clip-stacks.py play LegDay --from 2
+python clip-stacks.py play Highlights --from 2
 
 # List all profiles
 python clip-stacks.py list
@@ -111,20 +111,20 @@ Profiles are plain JSON files stored in `~/.clip-stacks/profiles/`. You can edit
 
 ```json
 {
-  "name": "LegDay",
-  "description": "Leg day form checks",
+  "name": "Highlights",
+  "description": "Important video marks",
   "segments": [
     {
-      "video": "/home/user/videos/squat_session.mp4",
+      "video": "/home/user/videos/movie.mp4",
       "start": 82.0,
       "end": 215.0,
-      "label": "Squat depth cue"
+      "label": "Cool scene"
     },
     {
-      "video": "/home/user/videos/leg_press.mp4",
+      "video": "/home/user/videos/lecture.mp4",
       "start": 45.0,
       "end": 130.0,
-      "label": "Leg press range"
+      "label": "Key definition"
     }
   ]
 }

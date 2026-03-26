@@ -7,7 +7,7 @@ Goal: Stream video highlights without re-encoding.
 
 ## 1. Problem Definition
 
-Reviewing specific video clips (e.g. exercise form, workout highlights) often requires:
+Reviewing specific video clips (e.g. lecture notes, game highlights, or raw footage) often requires:
 1.  Opening a long video file.
 2.  Scrubbing to find the right timestamp.
 3.  Closing and finding the next clip.
@@ -43,17 +43,17 @@ Reviewing specific video clips (e.g. exercise form, workout highlights) often re
 
 ## 4. Target Audience & Use Cases
 
--   **Athletes**: Review squat form cues before a heavy set.
+-   **Students**: Review specific segments from long recorded lectures.
+-   **Gamers**: Showcase high-skill moments from a long session.
 -   **Video Editors**: Quickly preview a set of raw clips for a rough cut.
--   **Teachers/Presenters**: Play specific highlights from long lectures.
 
 ---
 
 ## 5. Real-World Workflow Fit
 
-1.  **Recording**: You record your workout sets.
-2.  **Highlighting**: You open `clip-stacks` and mark the 25-second "work set" from a 3-minute video.
-3.  **Reviewing**: Before your next workout, you hit "Play Profile" to see only your best reps.
+1.  **Recording**: You record or download a long video.
+2.  **Highlighting**: You open `clip-stacks` and mark key timestamps (e.g. a 20-second explanation).
+3.  **Reviewing**: When you need to study or showcase, you hit "Play Profile" to see only the vital parts.
 
 ---
 

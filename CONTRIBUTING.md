@@ -45,4 +45,4 @@ Ensure your change:
 -   Keep comments clear but concise.
 -   Avoid large external libraries if a standard Python lib or `mpv` flag works.
 
-Thank you for contributing to better workout reviews! 💪🎬
+Thank you for contributing to better video reviews! 🎬🚀

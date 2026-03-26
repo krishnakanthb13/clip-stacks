@@ -3,7 +3,7 @@
 Clip Stacks 🎬💪
 ─────────────────────────────────────────────────────────────
 Stream video highlights from multiple files using timestamps.
-No re-encoding. No new files. Just your reps.
+No re-encoding. No new files. Just your clips.
 
 Author: Krishna Kanth B
 License: GPL v3
@@ -207,13 +207,13 @@ def cli_main():
 Examples:
   clip-stacks --gui                                # Open graphical editor
   clip-stacks list                                 # List saved profiles
-  clip-stacks play  LegDay                         # Play a profile
-  clip-stacks play  LegDay --from 3               # Start from segment #3
-  clip-stacks new   LegDay "Leg day highlights"
-  clip-stacks add   LegDay video.mp4 1:22 3:35 "Squat form"
-  clip-stacks add   LegDay other.mp4 0:45 2:10
-  clip-stacks show  LegDay
-  clip-stacks delete LegDay
+  clip-stacks play  Highlights                       # Play a profile
+  clip-stacks play  Highlights --from 3             # Start from segment #3
+  clip-stacks new   Highlights "Important scenes"
+  clip-stacks add   Highlights video.mp4 1:22 3:35 "Climax"
+  clip-stacks add   Highlights other.mp4 0:45 2:10
+  clip-stacks show  Highlights
+  clip-stacks delete Highlights
         """
     )
 
