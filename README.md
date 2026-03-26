@@ -79,13 +79,13 @@ python clip-stacks.py --gui
 ```
 
 1. Click **+ New** → name your profile (e.g. `MovieHighlights`)
-2. In "Add Segment" → **Browse** for your video file.
+2. In the "Add Segment" form → click **📁 Browse** for your video file.
 3. **Timestamp Entry**: Use the discrete **H:M:S spinboxes** for precise control.
-4. **Smart Sync**: Clip Stacks will automatically fetch the video duration and fill in the Start (`0:00:00`) and End times for you.
-5. (Optional) Adjust timestamps or add a label like `"Cool chase scene"`.
+4. **Smart Sync**: Clip Stacks will automatically fetch the video duration and fill in the `Start` (`0:00:00`) and `End` times for you.
+5. (Optional) Adjust timestamps or add a `Label` like `"Cool chase scene"`.
 6. Click **+ Add Segment**.
 7. **Refine**: Need a change? Select a segment and click **✎ Edit** to load it back into the form.
-8. **💾 Save Profile** → **▶ Play All** (starts from segment 1) or **▶ Play Selected** (starts from your current selection).
+8. **💾 Save** → **▶ Play All** (starts from segment 1) or **▶ Play From Selected** (starts from your current selection).
 9. **Auto-save**: The app automatically saves your profile before playback starts to ensure your latest changes are active.
 
 > [!TIP]

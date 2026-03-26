@@ -592,7 +592,7 @@ class ClipStacksApp:
         btn_row = tk.Frame(left, bg=self.BG2)
         btn_row.pack(fill="x", padx=10, pady=(0, 10))
         self._btn(btn_row, "+ New", self._new_profile, color=self.GREEN).pack(side="left", fill="x", expand=True, padx=(0, 3))
-        self._btn(btn_row, "✕ Del", self._delete_profile, color=self.RED).pack(side="right", fill="x", expand=True, padx=(3, 0))
+        self._btn(btn_row, "✕ Delete", self._delete_profile, color=self.RED).pack(side="right", fill="x", expand=True, padx=(3, 0))
 
     def _build_editor_info(self, parent):
         info = tk.Frame(parent, bg=self.BG)
@@ -601,13 +601,13 @@ class ClipStacksApp:
         self.name_var = tk.StringVar()
         self.desc_var = tk.StringVar()
         
-        tk.Label(info, text="Name", font=self.BOLD, fg=self.DIM, bg=self.BG).grid(row=0, column=0, sticky="w", padx=(0, 8))
+        tk.Label(info, text="Name:", font=self.BOLD, fg=self.DIM, bg=self.BG).grid(row=0, column=0, sticky="w", padx=(0, 8))
         tk.Entry(info, textvariable=self.name_var, bg=self.CARD, fg=self.ACCENT,
                  font=self.BOLD, insertbackground=self.ACCENT, borderwidth=0,
                  highlightthickness=1, highlightcolor=self.ACCENT,
                  highlightbackground=self.BORDER).grid(row=0, column=1, sticky="ew", padx=4, pady=3)
         
-        tk.Label(info, text="Desc", font=self.FONT, fg=self.DIM, bg=self.BG).grid(row=1, column=0, sticky="w", padx=(0, 8))
+        tk.Label(info, text="Description:", font=self.FONT, fg=self.DIM, bg=self.BG).grid(row=1, column=0, sticky="w", padx=(0, 8))
         tk.Entry(info, textvariable=self.desc_var, bg=self.CARD, fg=self.FG,
                  font=self.FONT, insertbackground=self.FG, borderwidth=0,
                  highlightthickness=1, highlightcolor=self.ACCENT,
@@ -721,7 +721,7 @@ class ClipStacksApp:
                       highlightthickness=1, highlightcolor=self.ACCENT,
                       highlightbackground=self.BORDER)
         fe.grid(row=0, column=1, columnspan=3, sticky="ew", padx=4, pady=3)
-        self._btn(form, "📁 Browse", self._browse_video).grid(row=0, column=4, padx=4)
+        self._btn(form, "📁 Browse", self._browse_video, color=self.BLUE).grid(row=0, column=4, padx=4)
 
         lbl("Start:", 1, 0)
         make_hms_row(form, self.start_h, self.start_m, self.start_s).grid(row=1, column=1, sticky="w", padx=4, pady=3)
@@ -754,7 +754,7 @@ class ClipStacksApp:
         bot.pack(fill="x", padx=8, pady=(0, 6))
         self._btn(bot, "💾 Save", self._save_profile, color=self.ACCENT).pack(side="left", padx=4)
         self._btn(bot, "▶ Play All", self._play_profile, color=self.GREEN, large=True).pack(side="left", padx=4)
-        self._btn(bot, "▶ Play from Selected", self._play_from_selected, color=self.BLUE).pack(side="left", padx=4)
+        self._btn(bot, "▶ Play From Selected", self._play_from_selected, color=self.BLUE).pack(side="left", padx=4)
 
     def _build_status_bar(self):
         status_frame = tk.Frame(self.root, bg=self.BG2, height=28)

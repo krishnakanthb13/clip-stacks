@@ -64,7 +64,7 @@ Reviewing specific video clips (e.g. lecture notes, game highlights, or raw foot
 
 1.  **Recording**: You record or download a long video.
 2.  **Highlighting**: You open `clip-stacks` and mark key timestamps (e.g. a 20-second explanation).
-3.  **Reviewing**: When you need to study or showcase, you hit "Play Profile" to see only the vital parts.
+3.  **Reviewing**: When you need to study or showcase, you hit **▶ Play All** to see only the vital parts.
 
 ---
 
@@ -75,7 +75,7 @@ Reviewing specific video clips (e.g. lecture notes, game highlights, or raw foot
 -   **Constraint**: There's a 0.5s flicker between clips as one process closes and the next opens. This is an intentional trade-off for simplicity over a complex Libmpv integration.
 
 ### Playback Control
--   **Constraint**: You skip *segments* using `q`, and quit the *entire app* using `Q`. This overrides standard mpv quit behavior to provide a fluid multi-segment experience.
+-   **Constraint**: You skip *segments* using `q`, and quit the *entire app* using `Q`. Both **▶ Play All** and **▶ Play from Selected** trigger a background `mpv` queue; this overrides standard `mpv` quit behavior to provide a fluid multi-segment experience.
 
 ### Choosing `mpv` + `ffprobe`
 - Leveraging `mpv`'s command-line interface instead of native bindings results in simpler code and easier cross-platform distribution.

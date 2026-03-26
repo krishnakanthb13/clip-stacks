@@ -43,8 +43,8 @@ Goal: Stream video highlights using `mpv` timestamps without re-encoding.
 - `add_segment(...)`: Back-end wrapper for CLI/GUI to create and append segments.
 
 ### Segment Editing
-- `_edit_segment()`: GUI-exclusive. Loads segment data into the form and enters "Edit Mode".
-- `_cancel_edit()`: Reverts the form to "Add Mode".
+- `_edit_segment()`: GUI-exclusive. Loads segment data into the form and enters **Edit Mode** (updates **+ Add Segment** to **✓ Save Edit**).
+- `_cancel_edit()`: Reverts the form to **Add Mode** (resets to **+ Add Segment**).
 - `edit` (CLI): Command to modify specific segments based on their index.
 
 ### Help & Utils
@@ -96,7 +96,7 @@ graph TD
     -   If `--gui` or no command: `gui_main()` launches `ClipStacksApp`.
     -   Else: Routes to CLI sub-command handlers (`p_play`, `p_add`, etc.).
 3.  **IO**: File data is loaded from `Path.home() / ".clip-stacks" / "profiles"`.
-4.  **Edit Loop**: GUI maintains an `_edit_index` to toggle between adding new segments and updating selected ones.
-5.  **Playback**: Each segment triggers a synchronous `subprocess.run([mpv, ...])` call. In GUI mode, this runs in a **background thread** to keep the interface responsive.
+4.  **Edit Loop**: GUI maintains an `_edit_index` to toggle between adding new segments (**+ Add Segment**) and updating selected ones (**✓ Save Edit**).
+5.  **Playback**: Each segment triggers a synchronous `subprocess.run([mpv, ...])` call on its own `mpv` instance. In GUI mode (initiated via **▶ Play All** or **▶ Play from Selected**), this runs in a **background thread** to keep the interface responsive.
 6.  **Error Handling**: A **Global Error Trap** in the entry point catches fatal exceptions. Support scripts like `launch_clip_stacks.sh` also perform **App Entry Checks** before launching.
 7.  **Termination**: `mpv` exit codes are monitored (e.g. `4` for user-quit). The bash launcher now traps **SIGINT** and **SIGTERM** to specifically kill the app process (`APP_PID`), preventing orphaned player instances.
