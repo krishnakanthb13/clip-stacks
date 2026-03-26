@@ -41,6 +41,10 @@ Reviewing specific video clips (e.g. lecture notes, game highlights, or raw foot
 - **H:M:S Discrete Input**: Trading complex string-writing for discrete spinboxes ensures users always input valid times with zero syntax errors.
 - **Iterative Refinement**: Highlighting is an art. Users can now "Edit" segments to fine-tune start/end points without deleting and re-adding.
 
+### Resilience
+- **Input Sanitization**: Profiles are bullet-proofed against path traversal and OS-reserved names.
+- **Global Error Trapping**: No silent failures — any startup crash is intercepted and reported with a detailed traceback.
+
 ### Flexibility
 -   **GUI + CLI**: Professionals can script with the CLI; casual users can browse with the GUI.
 

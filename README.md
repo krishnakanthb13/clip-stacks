@@ -26,7 +26,7 @@ Clip Stacks lets you define timestamp-based highlight playlists across multiple 
 - ✅ **Cross-platform** — Windows, macOS, Linux.
 - ✅ **Modern GUI** — Clean interface with hover effects and live stats.
 - ✅ **Minimalist dependencies** — just Python 3.8+ and `mpv`.
-- ✅ **CLI & Launchers** — use whichever you prefer (now with UTF-8 support).
+- ✅ **Robust Launchers** — Smart Python detection (`py`, `python`, `python3`) and ANSI-safe execution.
 - ✅ **GPL v3 licensed** — fork it, improve it, own it.
 
 ---
@@ -180,6 +180,7 @@ mpv other.mp4 --start=45 --end=130
 ### Common Issues
 - **`mpv not found`**: Ensure `mpv` (or `mpv.exe` on Windows) is in your system `PATH`.
 - **GUI fails to open**: Ensure `tkinter` is installed. On some Linux distros, you may need `sudo apt install python3-tk`.
+- **App opens and closes immediately**: The launcher now includes a **Global Error Trap**. If a crash occurs, a message box will appear with a detailed traceback to help diagnose the issue.
 
 ---
 

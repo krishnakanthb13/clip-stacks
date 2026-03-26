@@ -10,8 +10,8 @@ Goal: Stream video highlights using `mpv` timestamps without re-encoding.
 | File / Folder | Purpose |
 | :--- | :--- |
 | `clip-stacks.py` | Main application script (logic + GUI + CLI). |
-| `launch_clip_stacks.bat` | Windows launcher (runs python + `--gui`). |
-| `launch_clip_stacks.sh` | Unix launcher (runs python3 + `--gui`). |
+| `launch_clip_stacks.bat` | Windows launcher (detects `py`, `python`, `python3`). |
+| `launch_clip_stacks.sh` | Unix launcher (runs `python3` + `--gui`). |
 | `README.md` | General overview and usage guide. |
 | `LICENSE` | GPL v3 license text. |
 | `CODE_DOCUMENTATION.md` | Deep dive into codebase (this file). |
@@ -36,9 +36,11 @@ Goal: Stream video highlights using `mpv` timestamps without re-encoding.
 ## 3. Core Modules & Functions
 
 ### Profile Management
-- `load_profile(name)`: Reads JSON from the filesystem.
-- `save_profile(name, data)`: Persists profile as formatted JSON.
-- `add_segment(...)`: Back-end helper for CLI/GUI to append segments.
+- `load_profile(name)`: Reads JSON from the filesystem with fallback keys for corrupted files.
+- `_sanitize_name(name)`: Strips path-traversal characters and handles Windows-reserved file names.
+- `save_profile(name, data)`: Persists profile as formatted JSON safely.
+- `create_segment(...)`: Shared logic to validate timestamps and return a standardized segment dictionary.
+- `add_segment(...)`: Back-end wrapper for CLI/GUI to create and append segments.
 
 ### Segment Editing
 - `_edit_segment()`: GUI-exclusive. Loads segment data into the form and enters "Edit Mode".
@@ -49,7 +51,7 @@ Goal: Stream video highlights using `mpv` timestamps without re-encoding.
 - `parse_time(t)`: Logic for `H:MM:SS` parsing (crucial for CLI).
 - `_set_hms()` / `_get_hms()`: GUI helpers to sync spinboxes with float seconds.
 - `fmt_time(s)`: String formatting for UI and CLI display.
-- `find_mpv()`: Binary path discovery.
+- `find_mpv()`: Binary path discovery with **shutil caching** to prevent redundant scans.
 - `get_video_duration(video_path)`: Async-ready duration fetching via `ffprobe` or `mpv`.
 
 ### Playback Engine
@@ -95,4 +97,5 @@ graph TD
 3.  **IO**: File data is loaded from `Path.home() / ".clip-stacks" / "profiles"`.
 4.  **Edit Loop**: GUI maintains an `_edit_index` to toggle between adding new segments and updating selected ones.
 5.  **Playback**: Each segment triggers a synchronous `subprocess.run([mpv, ...])` call. In GUI mode, this runs in a **background thread** to keep the interface responsive.
-6.  **Termination**: `mpv` exit codes are monitored (e.g. `4` for user-quit).
+6.  **Error Handling**: A **Global Error Trap** in the entry point catches fatal exceptions, showing a documented traceback to prevent silent crashes.
+7.  **Termination**: `mpv` exit codes are monitored (e.g. `4` for user-quit).
