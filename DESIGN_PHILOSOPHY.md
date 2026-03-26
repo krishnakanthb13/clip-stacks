@@ -37,6 +37,10 @@ Reviewing specific video clips (e.g. lecture notes, game highlights, or raw foot
 -   **Zero Quality Loss**: The player seeks directly into the source file.
 -   **No Temp Files**: Nothing is written to disk during playback.
 
+### Precision & Control
+- **H:M:S Discrete Input**: Trading complex string-writing for discrete spinboxes ensures users always input valid times with zero syntax errors.
+- **Iterative Refinement**: Highlighting is an art. Users can now "Edit" segments to fine-tune start/end points without deleting and re-adding.
+
 ### Flexibility
 -   **GUI + CLI**: Professionals can script with the CLI; casual users can browse with the GUI.
 

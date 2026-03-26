@@ -38,13 +38,19 @@ Goal: Stream video highlights using `mpv` timestamps without re-encoding.
 ### Profile Management
 - `load_profile(name)`: Reads JSON from the filesystem.
 - `save_profile(name, data)`: Persists profile as formatted JSON.
-- `add_segment(profile, video, start, end, label)`: Validates and appends segments.
+- `add_segment(...)`: Back-end helper for CLI/GUI to append segments.
+
+### Segment Editing
+- `_edit_segment()`: GUI-exclusive. Loads segment data into the form and enters "Edit Mode".
+- `_cancel_edit()`: Reverts the form to "Add Mode".
+- `edit` (CLI): Command to modify specific segments based on their index.
 
 ### Help & Utils
-- `parse_time(t)`: Converts `H:MM:SS` or `MM:SS` strings to float seconds.
-- `fmt_time(s)`: Converts float seconds back to readable `H:MM:SS`.
-- `find_mpv()`: Locates `mpv` executable across different systems and PATHs.
-- `get_video_duration(video_path)`: Retrieves video duration via `ffprobe` or `mpv`.
+- `parse_time(t)`: Logic for `H:MM:SS` parsing (crucial for CLI).
+- `_set_hms()` / `_get_hms()`: GUI helpers to sync spinboxes with float seconds.
+- `fmt_time(s)`: String formatting for UI and CLI display.
+- `find_mpv()`: Binary path discovery.
+- `get_video_duration(video_path)`: Async-ready duration fetching via `ffprobe` or `mpv`.
 
 ### Playback Engine
 - `play_profile(profile, start_index)`: Iterates through segments and spawns `mpv` processes sequentially.
@@ -87,5 +93,6 @@ graph TD
     -   If `--gui` or no command: `gui_main()` launches `ClipStacksApp`.
     -   Else: Routes to CLI sub-command handlers (`p_play`, `p_add`, etc.).
 3.  **IO**: File data is loaded from `Path.home() / ".clip-stacks" / "profiles"`.
-4.  **Playback**: Each segment triggers a synchronous `subprocess.run([mpv, ...])` call. In GUI mode, this runs in a **background thread** to keep the interface responsive.
-5.  **Termination**: `mpv` exit codes are monitored (e.g. `4` for user-quit).
+4.  **Edit Loop**: GUI maintains an `_edit_index` to toggle between adding new segments and updating selected ones.
+5.  **Playback**: Each segment triggers a synchronous `subprocess.run([mpv, ...])` call. In GUI mode, this runs in a **background thread** to keep the interface responsive.
+6.  **Termination**: `mpv` exit codes are monitored (e.g. `4` for user-quit).

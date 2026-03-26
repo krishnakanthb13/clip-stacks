@@ -18,13 +18,15 @@ Clip Stacks lets you define timestamp-based highlight playlists across multiple 
 
 ---
 
+- ✅ **Precision H:M:S Controls** — Discrete spinboxes for hours, minutes, and seconds.
+- ✅ **Segment Editing** — Update existing highlights without re-adding them.
 - ✅ **Smart Time Sync** — Auto-detects video duration and pre-fills timestamps.
 - ✅ **No new video files created** — pure streaming via seek.
 - ✅ **Multiple profiles** — categorize highlights by type.
 - ✅ **Cross-platform** — Windows, macOS, Linux.
 - ✅ **Modern GUI** — Clean interface with hover effects and live stats.
 - ✅ **Minimalist dependencies** — just Python 3.8+ and `mpv`.
-- ✅ **CLI & Launchers** — use whichever you prefer.
+- ✅ **CLI & Launchers** — use whichever you prefer (now with UTF-8 support).
 - ✅ **GPL v3 licensed** — fork it, improve it, own it.
 
 ---
@@ -76,13 +78,15 @@ python clip-stacks.py --gui
 
 1. Click **+ New** → name your profile (e.g. `MovieHighlights`)
 2. In "Add Segment" → **Browse** for your video file.
-3. **Smart Sync**: Clip Stacks will automatically fetch the video duration and fill in the Start (`0:00`) and End times for you.
-4. (Optional) Adjust timestamps or add a label like `"Cool chase scene"`.
-5. Click **+ Add Segment**.
-6. **💾 Save Profile** → **▶ Play All**.
+3. **Timestamp Entry**: Use the discrete **H:M:S spinboxes** for precise control.
+4. **Smart Sync**: Clip Stacks will automatically fetch the video duration and fill in the Start (`0:00:00`) and End times for you.
+5. (Optional) Adjust timestamps or add a label like `"Cool chase scene"`.
+6. Click **+ Add Segment**.
+7. **Refine**: Need a change? Select a segment and click **✎ Edit** to load it back into the form.
+8. **💾 Save Profile** → **▶ Play All**.
 
 > [!TIP]
-> You can also use the **⟳ Sync** button at any time to reset the timestamps to the full video duration.
+> You can also use the **⟳ Sync** button at any time to reset the timestamps to the full video duration. The launcher now supports UTF-8 (chcp 65001) for better emoji and path rendering on Windows.
 
 ### CLI
 
@@ -101,8 +105,11 @@ python clip-stacks.py show Highlights
 # Play it
 python clip-stacks.py play Highlights
 
-# Start from segment 2
-python clip-stacks.py play Highlights --from 2
+# Edit a segment (index 2)
+python clip-stacks.py edit Highlights 2 video.mp4 1:00 2:30 "Updated label"
+
+# Start from segment 3
+python clip-stacks.py play Highlights --from 3
 
 # List all profiles
 python clip-stacks.py list
