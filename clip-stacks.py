@@ -88,19 +88,57 @@ def load_profile(name: str) -> dict:
     p = profile_path(name)
     if not p.exists():
         raise FileNotFoundError(f"Profile '{name}' not found.")
-    with open(p) as f:
+    with open(p, encoding="utf-8") as f:
         data = json.load(f)
     # Defensive defaults for hand-edited or corrupted files
     data.setdefault("name", name)
     data.setdefault("description", "")
-    data.setdefault("segments", [])
+    raw_segments = data.get("segments", [])
+    if not isinstance(raw_segments, list):
+        raw_segments = []
+    normalized_segments = []
+    skipped = 0
+    for seg in raw_segments:
+        try:
+            if not isinstance(seg, dict):
+                raise ValueError("Segment must be an object.")
+            video = str(seg.get("video", "")).strip()
+            start = float(seg.get("start"))
+            end = float(seg.get("end"))
+            if not video:
+                raise ValueError("Video path is required.")
+            if start < 0 or end < 0:
+                raise ValueError("Times must be non-negative.")
+            if end <= start:
+                raise ValueError("End must be after start.")
+            label = str(seg.get("label", "")).strip()
+            if not label:
+                label = f"{Path(video).stem}  {fmt_time(start)}–{fmt_time(end)}"
+            normalized_segments.append({
+                "video": os.path.abspath(video),
+                "start": start,
+                "end": end,
+                "label": label,
+            })
+        except (TypeError, ValueError):
+            skipped += 1
+    data["segments"] = normalized_segments
+    if skipped:
+        print(f"⚠️  Profile '{name}': skipped {skipped} invalid segment(s).")
     return data
 
 
 def save_profile(name: str, data: dict):
-    with open(profile_path(name), "w") as f:
-        json.dump(data, f, indent=2)
-    print(f"✅  Profile '{name}' saved → {profile_path(name)}")
+    out_path = profile_path(name)
+    tmp_path = out_path.with_suffix(out_path.suffix + ".tmp")
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp_path, out_path)
+    finally:
+        if tmp_path.exists():
+            tmp_path.unlink(missing_ok=True)
+    print(f"✅  Profile '{name}' saved → {out_path}")
 
 
 def new_profile(name: str) -> dict:
@@ -111,6 +149,8 @@ def create_segment(video: str, start_sec: float, end_sec: float, label: str = ""
     """Validate times and return a standard segment dictionary."""
     if not video:
         raise ValueError("Video file is required.")
+    if start_sec < 0 or end_sec < 0:
+        raise ValueError("Start/end times must be non-negative.")
     if end_sec <= start_sec:
         raise ValueError("End time must be after start time.")
     
@@ -788,10 +828,14 @@ class ClipStacksApp:
         if not name:
             return
         name = name.strip().replace(" ", "_")
+        if not name:
+            messagebox.showwarning("Invalid name", "Profile name cannot be blank.")
+            return
         p = new_profile(name)
         save_profile(name, p)
         self._refresh_profiles()
         self.current_profile = p
+        self._original_profile_name = name
         self.name_var.set(name)
         self.desc_var.set("")
         self._refresh_segments()
@@ -815,14 +859,19 @@ class ClipStacksApp:
             messagebox.showwarning("No profile", "Select or create a profile first.")
             return
         new_name = self.name_var.get().strip()
-        # Handle rename: delete old file if the name changed
-        if self._original_profile_name and new_name != self._original_profile_name:
-            old_path = profile_path(self._original_profile_name)
-            if old_path.exists():
-                old_path.unlink()
+        if not new_name:
+            messagebox.showwarning("Invalid name", "Profile name cannot be blank.")
+            return
+        old_name = self._original_profile_name
         self.current_profile["name"] = new_name
         self.current_profile["description"] = self.desc_var.get().strip()
         save_profile(new_name, self.current_profile)
+        # Handle rename only after successful save.
+        if old_name and new_name != old_name:
+            old_path = profile_path(old_name)
+            new_path = profile_path(new_name)
+            if old_path != new_path and old_path.exists():
+                old_path.unlink()
         self._original_profile_name = new_name  # Update tracker
         self._refresh_profiles()
         self.status(f"Saved: {new_name}")

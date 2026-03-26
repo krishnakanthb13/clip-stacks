@@ -18,6 +18,12 @@ then
     exit 1
 fi
 
+# Ensure app entry exists
+if [ ! -f "$APP_ENTRY" ]; then
+    echo "[ERROR] '$APP_ENTRY' was not found."
+    exit 1
+fi
+
 # Check for mpv
 if ! command -v mpv &> /dev/null
 then
@@ -30,11 +36,19 @@ fi
 
 echo "🚀 Launching Clip Stacks GUI..."
 
-# Trap SIGINT to kill child processes (like mpv) if launcher is closed
-trap 'kill 0' SIGINT
+# Trap SIGINT/SIGTERM and stop only the launched app process
+APP_PID=""
+cleanup() {
+    if [ -n "$APP_PID" ] && kill -0 "$APP_PID" 2>/dev/null; then
+        kill "$APP_PID" 2>/dev/null
+    fi
+}
+trap cleanup SIGINT SIGTERM
 
 # Use python3 specifically to avoid confusion with python 2 on some systems
-python3 "$APP_ENTRY" --gui "$@"
+python3 "$APP_ENTRY" --gui "$@" &
+APP_PID=$!
+wait "$APP_PID"
 
 EXIT_CODE=$?
 if [ $EXIT_CODE -ne 0 ]; then
