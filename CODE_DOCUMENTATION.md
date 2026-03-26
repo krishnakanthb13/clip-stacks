@@ -44,6 +44,7 @@ Goal: Stream video highlights using `mpv` timestamps without re-encoding.
 - `parse_time(t)`: Converts `H:MM:SS` or `MM:SS` strings to float seconds.
 - `fmt_time(s)`: Converts float seconds back to readable `H:MM:SS`.
 - `find_mpv()`: Locates `mpv` executable across different systems and PATHs.
+- `get_video_duration(video_path)`: Retrieves video duration via `ffprobe` or `mpv`.
 
 ### Playback Engine
 - `play_profile(profile, start_index)`: Iterates through segments and spawns `mpv` processes sequentially.
@@ -74,6 +75,7 @@ graph TD
 
 ### Optional
 - **tkinter**: Required for the `--gui` mode (standard on most Python installs).
+- **ffprobe**: Speeds up video duration detection.
 - **python-mpv**: (Placeholder) Hook for future embedded playback support.
 
 ---
@@ -85,5 +87,5 @@ graph TD
     -   If `--gui` or no command: `gui_main()` launches `ClipStacksApp`.
     -   Else: Routes to CLI sub-command handlers (`p_play`, `p_add`, etc.).
 3.  **IO**: File data is loaded from `Path.home() / ".clip-stacks" / "profiles"`.
-4.  **Playback**: Each segment triggers a synchronous `subprocess.run([mpv, ...])` call.
+4.  **Playback**: Each segment triggers a synchronous `subprocess.run([mpv, ...])` call. In GUI mode, this runs in a **background thread** to keep the interface responsive.
 5.  **Termination**: `mpv` exit codes are monitored (e.g. `4` for user-quit).

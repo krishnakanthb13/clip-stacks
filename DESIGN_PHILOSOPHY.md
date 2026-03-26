@@ -22,7 +22,8 @@ Reviewing specific video clips (e.g. lecture notes, game highlights, or raw foot
 1.  **Speed**: No re-encoding means instant "highlights" as soon as you define the timestamps.
 2.  **No Disk Bloat**: You don't need to save 5 versions of the same video just for different clips.
 3.  **Cross-File Playlists**: You can mix segments from different files into a single "profile".
-4.  **Minimalist Stack**: Relies on `mpv` — a powerful, standard, and portable player.
+4.  **Smart Sync**: Automatically fetching durations via `ffprobe`/`mpv` removes the manual work of entering timestamps.
+5.  **Aesthetics**: The modern GUI ensures a visually-pleasing experience that is as powerful as it is clean.
 
 ---
 
@@ -65,3 +66,7 @@ Reviewing specific video clips (e.g. lecture notes, game highlights, or raw foot
 
 ### Playback Control
 -   **Constraint**: You skip *segments* using `q`, and quit the *entire app* using `Q`. This overrides standard mpv quit behavior to provide a fluid multi-segment experience.
+
+### Choosing `mpv` + `ffprobe`
+- Leveraging `mpv`'s command-line interface instead of native bindings results in simpler code and easier cross-platform distribution.
+- If `ffprobe` is present, we use it for faster, near-instant duration extraction; otherwise, `mpv` is used as a reliable fallback.

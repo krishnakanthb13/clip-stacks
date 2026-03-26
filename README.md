@@ -18,11 +18,13 @@ Clip Stacks lets you define timestamp-based highlight playlists across multiple 
 
 ---
 
+- ✅ **Smart Time Sync** — Auto-detects video duration and pre-fills timestamps.
 - ✅ **No new video files created** — pure streaming via seek.
 - ✅ **Multiple profiles** — categorize highlights by type.
 - ✅ **Cross-platform** — Windows, macOS, Linux.
+- ✅ **Modern GUI** — Clean interface with hover effects and live stats.
 - ✅ **Minimalist dependencies** — just Python 3.8+ and `mpv`.
-- ✅ **GUI + CLI** — use whichever you prefer.
+- ✅ **CLI & Launchers** — use whichever you prefer.
 - ✅ **GPL v3 licensed** — fork it, improve it, own it.
 
 ---
@@ -73,11 +75,14 @@ python clip-stacks.py --gui
 ```
 
 1. Click **+ New** → name your profile (e.g. `MovieHighlights`)
-2. In "Add Segment" → Browse for your video file
-3. Enter Start and End timestamps (`1:22`, `3:35`, `0:01:22`, etc.)
-4. Add a label like `"Cool chase scene"`
-5. Repeat for more clips (different files allowed!)
-6. **💾 Save Profile** → **▶ Play Profile**
+2. In "Add Segment" → **Browse** for your video file.
+3. **Smart Sync**: Clip Stacks will automatically fetch the video duration and fill in the Start (`0:00`) and End times for you.
+4. (Optional) Adjust timestamps or add a label like `"Cool chase scene"`.
+5. Click **+ Add Segment**.
+6. **💾 Save Profile** → **▶ Play All**.
+
+> [!TIP]
+> You can also use the **⟳ Sync** button at any time to reset the timestamps to the full video duration.
 
 ### CLI
 
@@ -163,6 +168,7 @@ mpv other.mp4 --start=45 --end=130
 ### Requirements
 - **Python 3.8+**
 - **mpv player**: The backbone of the playback engine.
+- **ffprobe** (optional): Greatly speeds up video duration detection. Usually comes bundled with `ffmpeg`.
 
 ### Common Issues
 - **`mpv not found`**: Ensure `mpv` (or `mpv.exe` on Windows) is in your system `PATH`.
