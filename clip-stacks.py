@@ -13,6 +13,7 @@ Requires: mpv installed on your system
 
 import json
 import os
+import re
 import sys
 import subprocess
 import shutil
@@ -30,6 +31,8 @@ except ImportError:
 
 PROFILES_DIR = Path.home() / ".clip-stacks" / "profiles"
 PROFILES_DIR.mkdir(parents=True, exist_ok=True)
+
+VERSION = "1.0"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -65,8 +68,16 @@ def fmt_time(seconds: float) -> str:
 # Core: Profile I/O
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _sanitize_name(name: str) -> str:
+    """Strip dangerous characters from a profile name."""
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name.strip())
+    if name.upper() in ('CON', 'PRN', 'AUX', 'NUL') or re.match(r'^(COM|LPT)\d$', name.upper()):
+        name = f"_{name}"
+    return name or "untitled"
+
+
 def profile_path(name: str) -> Path:
-    return PROFILES_DIR / f"{name}.json"
+    return PROFILES_DIR / f"{_sanitize_name(name)}.json"
 
 
 def list_profiles() -> list[str]:
@@ -78,7 +89,12 @@ def load_profile(name: str) -> dict:
     if not p.exists():
         raise FileNotFoundError(f"Profile '{name}' not found.")
     with open(p) as f:
-        return json.load(f)
+        data = json.load(f)
+    # Defensive defaults for hand-edited or corrupted files
+    data.setdefault("name", name)
+    data.setdefault("description", "")
+    data.setdefault("segments", [])
+    return data
 
 
 def save_profile(name: str, data: dict):
@@ -109,11 +125,17 @@ def add_segment(profile: dict, video: str, start: str, end: str, label: str = ""
 # Core: Playback engine (subprocess mpv — works everywhere)
 # ─────────────────────────────────────────────────────────────────────────────
 
+_mpv_cache = None
+
 def find_mpv() -> str:
-    """Return path to mpv binary or raise."""
+    """Return path to mpv binary or raise. Cached after first successful lookup."""
+    global _mpv_cache
+    if _mpv_cache:
+        return _mpv_cache
     binary = "mpv.exe" if sys.platform == "win32" else "mpv"
     path = shutil.which(binary)
     if path:
+        _mpv_cache = path
         return path
     # Common fallback locations
     fallbacks = [
@@ -124,6 +146,7 @@ def find_mpv() -> str:
     ]
     for fb in fallbacks:
         if os.path.isfile(fb):
+            _mpv_cache = fb
             return fb
     raise FileNotFoundError(
         "mpv not found. Install it:\n"
@@ -392,12 +415,22 @@ Examples:
         else:
             print(f"❌  Profile '{args.profile}' not found.")
 
-    elif args.cmd == "edit":
-        try:
-            profile = load_profile(args.profile)
-            idx = args.index - 1
-            segs = profile.get("segments", [])
-            if 0 <= idx < len(segs):
+    elif args.cmd in ("edit", "remove"):
+        def _with_segment(callback):
+            """Load profile, validate index, call callback(profile, segs, idx)."""
+            try:
+                profile = load_profile(args.profile)
+                idx = args.index - 1
+                segs = profile.get("segments", [])
+                if 0 <= idx < len(segs):
+                    callback(profile, segs, idx)
+                else:
+                    print(f"❌  Segment #{args.index} does not exist (profile has {len(segs)}).")
+            except (ValueError, FileNotFoundError) as e:
+                print(f"❌  {e}")
+
+        if args.cmd == "edit":
+            def _do_edit(profile, segs, idx):
                 s = parse_time(args.start)
                 e = parse_time(args.end)
                 if e <= s:
@@ -408,24 +441,13 @@ Examples:
                     segs[idx] = {"video": video, "start": s, "end": e, "label": label}
                     save_profile(args.profile, profile)
                     print(f"✏️  Updated segment #{args.index}: {label}")
-            else:
-                print(f"❌  Segment #{args.index} does not exist (profile has {len(segs)}).")
-        except (ValueError, FileNotFoundError) as e:
-            print(f"❌  {e}")
-
-    elif args.cmd == "remove":
-        try:
-            profile = load_profile(args.profile)
-            idx = args.index - 1
-            segs = profile.get("segments", [])
-            if 0 <= idx < len(segs):
+            _with_segment(_do_edit)
+        else:
+            def _do_remove(profile, segs, idx):
                 removed = segs.pop(idx)
                 save_profile(args.profile, profile)
                 print(f"🗑  Removed segment #{args.index}: {removed.get('label','')}")
-            else:
-                print(f"❌  Segment #{args.index} does not exist (profile has {len(segs)}).")
-        except FileNotFoundError as e:
-            print(f"❌  {e}")
+            _with_segment(_do_remove)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -486,7 +508,7 @@ class ClipStacksApp:
                  font=self.FONT_SM, fg=self.DIM, bg=self.BG).pack(anchor="w")
 
         # Version badge
-        ver = tk.Label(hdr, text=" v1.0 ", font=self.FONT_SM,
+        ver = tk.Label(hdr, text=f" v{VERSION} ", font=self.FONT_SM,
                        fg=self.ACCENT, bg=self.BORDER)
         ver.pack(side="right", padx=4)
 
@@ -603,6 +625,7 @@ class ClipStacksApp:
         self.seg_tree.configure(yscrollcommand=sb.set)
         self.seg_tree.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
+        self.seg_tree.bind("<Double-1>", lambda e: self._edit_segment())
 
         # Segment add/edit form
         self._edit_index = None  # None = add mode, int = edit mode
@@ -678,7 +701,8 @@ class ClipStacksApp:
         self.add_btn.pack(side="left", padx=2)
         self._btn(add_row, "✎ Edit", self._edit_segment, color=self.ACCENT2).pack(side="left", padx=2)
         self.cancel_edit_btn = self._btn(add_row, "✕ Cancel Edit", self._cancel_edit, color=self.RED)
-        self._btn(add_row, "✕ Remove", self._remove_segment, color=self.RED).pack(side="left", padx=2)
+        self.remove_btn = self._btn(add_row, "✕ Remove", self._remove_segment, color=self.RED)
+        self.remove_btn.pack(side="left", padx=2)
         self._btn(add_row, "↑ Up", self._move_up).pack(side="left", padx=2)
         self._btn(add_row, "↓ Down", self._move_down).pack(side="left", padx=2)
 
@@ -927,7 +951,7 @@ class ClipStacksApp:
         # Visual cues
         self.seg_form.config(text=f" ✎ Editing Segment #{idx + 1} ")
         self.add_btn.config(text="✓ Save Edit", fg=self.ACCENT2)
-        self.cancel_edit_btn.pack(side="left", padx=2, before=self.add_btn.master.winfo_children()[3])  # before Remove
+        self.cancel_edit_btn.pack(side="left", padx=2, before=self.remove_btn)  # before Remove
         self.status(f"Editing segment #{idx + 1}")
 
     def _cancel_edit(self):
@@ -946,6 +970,8 @@ class ClipStacksApp:
         return self.seg_tree.index(sel[0])
 
     def _remove_segment(self):
+        if not self.current_profile:
+            return
         idx = self._selected_idx()
         if idx is None:
             return
