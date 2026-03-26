@@ -252,13 +252,14 @@ def cli_main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  clip-stacks --gui                                # Open graphical editor
-  clip-stacks list                                 # List saved profiles
-  clip-stacks play  Highlights                       # Play a profile
-  clip-stacks play  Highlights --from 3             # Start from segment #3
+  clip-stacks --gui                                    # Open graphical editor
+  clip-stacks list                                     # List saved profiles
+  clip-stacks play  Highlights                         # Play a profile
+  clip-stacks play  Highlights --from 3                # Start from segment #3
   clip-stacks new   Highlights "Important scenes"
   clip-stacks add   Highlights video.mp4 1:22 3:35 "Climax"
   clip-stacks add   Highlights other.mp4 0:45 2:10
+  clip-stacks edit  Highlights 2 video.mp4 1:00 2:30   # Edit segment #2
   clip-stacks show  Highlights
   clip-stacks delete Highlights
         """
@@ -296,6 +297,15 @@ Examples:
     # delete
     p_del = sub.add_parser("delete", help="Delete a profile")
     p_del.add_argument("profile")
+
+    # edit segment
+    p_edit = sub.add_parser("edit", help="Edit a segment in a profile")
+    p_edit.add_argument("profile")
+    p_edit.add_argument("index", type=int, help="Segment number (1-based)")
+    p_edit.add_argument("video")
+    p_edit.add_argument("start", help="e.g. 1:22 or 0:01:22")
+    p_edit.add_argument("end",   help="e.g. 3:35 or 0:03:35")
+    p_edit.add_argument("label", nargs="?", default="")
 
     # remove segment
     p_rm = sub.add_parser("remove", help="Remove a segment from profile")
@@ -381,6 +391,27 @@ Examples:
             print(f"🗑  Profile '{args.profile}' deleted.")
         else:
             print(f"❌  Profile '{args.profile}' not found.")
+
+    elif args.cmd == "edit":
+        try:
+            profile = load_profile(args.profile)
+            idx = args.index - 1
+            segs = profile.get("segments", [])
+            if 0 <= idx < len(segs):
+                s = parse_time(args.start)
+                e = parse_time(args.end)
+                if e <= s:
+                    print(f"❌  End ({args.end}) must be after start ({args.start})")
+                else:
+                    video = os.path.abspath(args.video)
+                    label = args.label or f"{Path(args.video).stem}  {fmt_time(s)}–{fmt_time(e)}"
+                    segs[idx] = {"video": video, "start": s, "end": e, "label": label}
+                    save_profile(args.profile, profile)
+                    print(f"✏️  Updated segment #{args.index}: {label}")
+            else:
+                print(f"❌  Segment #{args.index} does not exist (profile has {len(segs)}).")
+        except (ValueError, FileNotFoundError) as e:
+            print(f"❌  {e}")
 
     elif args.cmd == "remove":
         try:
@@ -573,25 +604,49 @@ class ClipStacksApp:
         self.seg_tree.pack(side="left", fill="both", expand=True)
         sb.pack(side="right", fill="y")
 
-        # Segment add form
-        form = tk.LabelFrame(right, text=" Add Segment ",
+        # Segment add/edit form
+        self._edit_index = None  # None = add mode, int = edit mode
+        self.seg_form = tk.LabelFrame(right, text=" Add Segment ",
                              fg=self.ACCENT, bg=self.BG, font=self.FONT,
                              borderwidth=1, relief="groove",
                              highlightbackground=self.BORDER, highlightthickness=1)
-        form.pack(fill="x", padx=8, pady=(8, 4))
+        self.seg_form.pack(fill="x", padx=8, pady=(8, 4))
+        form = self.seg_form
 
         self.seg_file  = tk.StringVar()
-        self.seg_start = tk.StringVar()
-        self.seg_end   = tk.StringVar()
         self.seg_label = tk.StringVar()
 
-        def lbl(t, r, c): tk.Label(form, text=t, font=self.FONT,
-                                   fg=self.DIM, bg=self.BG).grid(row=r, column=c, sticky="w", padx=4, pady=3)
-        def ent(var, r, c, w=14): tk.Entry(form, textvariable=var, width=w,
-                                           bg=self.CARD, fg=self.FG, insertbackground=self.FG,
-                                           font=self.MONO, borderwidth=0,
-                                           highlightthickness=1, highlightcolor=self.ACCENT,
-                                           highlightbackground=self.BORDER).grid(row=r, column=c, padx=4, pady=3, sticky="ew")
+        # H:M:S IntVars for start and end
+        self.start_h = tk.IntVar(value=0)
+        self.start_m = tk.IntVar(value=0)
+        self.start_s = tk.IntVar(value=0)
+        self.end_h   = tk.IntVar(value=0)
+        self.end_m   = tk.IntVar(value=0)
+        self.end_s   = tk.IntVar(value=0)
+
+        def lbl(t, r, c, **kw): tk.Label(form, text=t, font=self.FONT,
+                                   fg=self.DIM, bg=self.BG).grid(row=r, column=c, sticky="w", padx=4, pady=3, **kw)
+
+        def make_spinbox(parent, var, from_=0, to=59):
+            sb = tk.Spinbox(parent, textvariable=var, from_=from_, to=to, width=3,
+                            format="%02.0f", justify="center",
+                            bg=self.CARD, fg=self.FG, insertbackground=self.FG,
+                            font=self.MONO, borderwidth=0, buttonbackground=self.BG2,
+                            highlightthickness=1, highlightcolor=self.ACCENT,
+                            highlightbackground=self.BORDER)
+            return sb
+
+        def make_hms_row(parent, h_var, m_var, s_var):
+            """Build an H : M : S spinbox row and return the frame."""
+            frm = tk.Frame(parent, bg=self.BG)
+            make_spinbox(frm, h_var, 0, 99).pack(side="left")
+            tk.Label(frm, text="h", font=self.FONT_SM, fg=self.DIM, bg=self.BG).pack(side="left", padx=(1, 4))
+            make_spinbox(frm, m_var, 0, 59).pack(side="left")
+            tk.Label(frm, text="m", font=self.FONT_SM, fg=self.DIM, bg=self.BG).pack(side="left", padx=(1, 4))
+            make_spinbox(frm, s_var, 0, 59).pack(side="left")
+            tk.Label(frm, text="s", font=self.FONT_SM, fg=self.DIM, bg=self.BG).pack(side="left", padx=(1, 0))
+            return frm
+
         lbl("Video file:", 0, 0)
         fe = tk.Entry(form, textvariable=self.seg_file, bg=self.CARD, fg=self.FG,
                       font=self.FONT, insertbackground=self.FG, borderwidth=0,
@@ -600,9 +655,15 @@ class ClipStacksApp:
         fe.grid(row=0, column=1, columnspan=3, sticky="ew", padx=4, pady=3)
         self._btn(form, "📁 Browse", self._browse_video).grid(row=0, column=4, padx=4)
 
-        lbl("Start:", 1, 0); ent(self.seg_start, 1, 1, 10)
-        lbl("End:",   1, 2); ent(self.seg_end,   1, 3, 10)
+        lbl("Start:", 1, 0)
+        start_hms = make_hms_row(form, self.start_h, self.start_m, self.start_s)
+        start_hms.grid(row=1, column=1, sticky="w", padx=4, pady=3)
+
+        lbl("End:", 1, 2)
+        end_hms = make_hms_row(form, self.end_h, self.end_m, self.end_s)
+        end_hms.grid(row=1, column=3, sticky="w", padx=4, pady=3)
         self._btn(form, "⟳ Sync", self._sync_times, color=self.BLUE).grid(row=1, column=4, padx=4)
+
         lbl("Label:", 2, 0)
         tk.Entry(form, textvariable=self.seg_label, bg=self.CARD, fg=self.FG,
                  font=self.FONT, insertbackground=self.FG, borderwidth=0,
@@ -613,7 +674,10 @@ class ClipStacksApp:
 
         add_row = tk.Frame(form, bg=self.BG)
         add_row.grid(row=3, column=0, columnspan=5, pady=6, padx=4, sticky="w")
-        self._btn(add_row, "+ Add Segment", self._add_segment, color=self.GREEN).pack(side="left", padx=2)
+        self.add_btn = self._btn(add_row, "+ Add Segment", self._add_segment, color=self.GREEN)
+        self.add_btn.pack(side="left", padx=2)
+        self._btn(add_row, "✎ Edit", self._edit_segment, color=self.ACCENT2).pack(side="left", padx=2)
+        self.cancel_edit_btn = self._btn(add_row, "✕ Cancel Edit", self._cancel_edit, color=self.RED)
         self._btn(add_row, "✕ Remove", self._remove_segment, color=self.RED).pack(side="left", padx=2)
         self._btn(add_row, "↑ Up", self._move_up).pack(side="left", padx=2)
         self._btn(add_row, "↓ Down", self._move_down).pack(side="left", padx=2)
@@ -755,15 +819,28 @@ class ClipStacksApp:
             self.seg_file.set(f)
             self._auto_fill_times(f)
 
+    def _set_hms(self, h_var, m_var, s_var, seconds: float):
+        """Set H:M:S IntVars from a float seconds value."""
+        total = max(0, int(seconds))
+        h_var.set(total // 3600)
+        m_var.set((total % 3600) // 60)
+        s_var.set(total % 60)
+
+    def _get_hms(self, h_var, m_var, s_var) -> float:
+        """Read H:M:S IntVars → float seconds."""
+        try:
+            return int(h_var.get()) * 3600 + int(m_var.get()) * 60 + int(s_var.get())
+        except (ValueError, tk.TclError):
+            return 0.0
+
     def _auto_fill_times(self, video_path: str):
-        """Fill start=0:00 and end=<duration> in a background thread."""
-        self.seg_start.set("0:00")
-        self.seg_end.set("...")
+        """Fill start=0:00:00 and end=<duration> in a background thread."""
+        self._set_hms(self.start_h, self.start_m, self.start_s, 0)
+        self._set_hms(self.end_h, self.end_m, self.end_s, 0)
         self.status(f"⏳ Reading duration for {Path(video_path).name}...")
 
         def detect():
             dur = get_video_duration(video_path)
-            # Schedule GUI update on main thread
             self.root.after(0, lambda: self._on_duration_detected(dur, video_path))
 
         threading.Thread(target=detect, daemon=True).start()
@@ -771,14 +848,14 @@ class ClipStacksApp:
     def _on_duration_detected(self, dur: float | None, video_path: str):
         """Called on the main thread after duration detection completes."""
         if dur is not None:
-            self.seg_end.set(fmt_time(dur))
+            self._set_hms(self.end_h, self.end_m, self.end_s, dur)
             self.status(f"✅ {Path(video_path).name} — {fmt_time(dur)} total")
         else:
-            self.seg_end.set("")
+            self._set_hms(self.end_h, self.end_m, self.end_s, 0)
             self.status(f"⚠️ Could not read duration for {Path(video_path).name}")
 
     def _sync_times(self):
-        """Manually sync start/end to 0:00 and video duration."""
+        """Manually sync start/end to 0:00:00 and video duration."""
         video = self.seg_file.get().strip()
         if not video:
             messagebox.showinfo("No video", "Select a video file first.")
@@ -793,22 +870,74 @@ class ClipStacksApp:
             messagebox.showwarning("No profile", "Select or create a profile first.")
             return
         video = self.seg_file.get().strip()
-        start = self.seg_start.get().strip()
-        end   = self.seg_end.get().strip()
+        start_sec = self._get_hms(self.start_h, self.start_m, self.start_s)
+        end_sec   = self._get_hms(self.end_h, self.end_m, self.end_s)
         label = self.seg_label.get().strip()
-        if not video or not start or not end:
-            messagebox.showerror("Missing fields", "Video file, start, and end are required.")
+        if not video:
+            messagebox.showerror("Missing fields", "Video file is required.")
+            return
+        if end_sec <= start_sec:
+            messagebox.showerror("Invalid times", "End time must be after start time.")
             return
         try:
-            add_segment(self.current_profile, video, start, end, label)
+            seg_entry = {
+                "video": os.path.abspath(video),
+                "start": start_sec,
+                "end":   end_sec,
+                "label": label or f"{Path(video).stem}  {fmt_time(start_sec)}–{fmt_time(end_sec)}"
+            }
+            if self._edit_index is not None:
+                # Replace existing segment
+                self.current_profile["segments"][self._edit_index] = seg_entry
+                self._cancel_edit()
+                self.status(f"Segment updated. Total: {len(self.current_profile['segments'])}")
+            else:
+                self.current_profile["segments"].append(seg_entry)
+                self.status(f"Added segment. Total: {len(self.current_profile['segments'])}")
             self._refresh_segments()
-            self.seg_file.set("")
-            self.seg_start.set("")
-            self.seg_end.set("")
-            self.seg_label.set("")
-            self.status(f"Added segment. Total: {len(self.current_profile['segments'])}")
-        except (ValueError, FileNotFoundError) as e:
+            self._clear_form()
+        except Exception as e:
             messagebox.showerror("Error", str(e))
+
+    def _clear_form(self):
+        """Reset form fields to defaults."""
+        self.seg_file.set("")
+        self._set_hms(self.start_h, self.start_m, self.start_s, 0)
+        self._set_hms(self.end_h, self.end_m, self.end_s, 0)
+        self.seg_label.set("")
+
+    def _edit_segment(self):
+        """Load selected segment into the form for editing."""
+        idx = self._selected_idx()
+        if idx is None:
+            messagebox.showinfo("No selection", "Select a segment in the list first.")
+            return
+        if not self.current_profile:
+            return
+        segs = self.current_profile.get("segments", [])
+        if idx < 0 or idx >= len(segs):
+            return
+        seg = segs[idx]
+        self._edit_index = idx
+        # Populate form
+        self.seg_file.set(seg["video"])
+        self._set_hms(self.start_h, self.start_m, self.start_s, seg["start"])
+        self._set_hms(self.end_h, self.end_m, self.end_s, seg["end"])
+        self.seg_label.set(seg.get("label", ""))
+        # Visual cues
+        self.seg_form.config(text=f" ✎ Editing Segment #{idx + 1} ")
+        self.add_btn.config(text="✓ Save Edit", fg=self.ACCENT2)
+        self.cancel_edit_btn.pack(side="left", padx=2, before=self.add_btn.master.winfo_children()[3])  # before Remove
+        self.status(f"Editing segment #{idx + 1}")
+
+    def _cancel_edit(self):
+        """Exit edit mode and reset form."""
+        self._edit_index = None
+        self.seg_form.config(text=" Add Segment ")
+        self.add_btn.config(text="+ Add Segment", fg=self.GREEN)
+        self.cancel_edit_btn.pack_forget()
+        self._clear_form()
+        self.status("Edit cancelled.")
 
     def _selected_idx(self):
         sel = self.seg_tree.selection()
