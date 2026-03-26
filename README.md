@@ -26,7 +26,9 @@ Clip Stacks lets you define timestamp-based highlight playlists across multiple 
 - ✅ **Cross-platform** — Windows, macOS, Linux.
 - ✅ **Modern GUI** — Clean interface with hover effects and live stats.
 - ✅ **Minimalist dependencies** — just Python 3.8+ and `mpv`.
-- ✅ **Robust Launchers** — Smart Python detection (`py`, `python`, `python3`) and ANSI-safe execution.
+- ✅ **Robust Launchers** — Smart Python detection (`py`, `python`, `python3`), existence checks, and specific process cleanup.
+- ✅ **Atomic Saves** — Uses temporary files to prevent profile corruption during crashes.
+- ✅ **Fault-Tolerant Loading** — Automatically validates and normalizes segments; skips invalid data with warnings.
 - ✅ **GPL v3 licensed** — fork it, improve it, own it.
 
 ---
@@ -83,7 +85,8 @@ python clip-stacks.py --gui
 5. (Optional) Adjust timestamps or add a label like `"Cool chase scene"`.
 6. Click **+ Add Segment**.
 7. **Refine**: Need a change? Select a segment and click **✎ Edit** to load it back into the form.
-8. **💾 Save Profile** → **▶ Play All**.
+8. **💾 Save Profile** → **▶ Play All** (starts from segment 1) or **▶ Play Selected** (starts from your current selection).
+9. **Auto-save**: The app automatically saves your profile before playback starts to ensure your latest changes are active.
 
 > [!TIP]
 > You can also use the **⟳ Sync** button at any time to reset the timestamps to the full video duration. The launcher now supports UTF-8 (chcp 65001) for better emoji and path rendering on Windows.
@@ -180,7 +183,8 @@ mpv other.mp4 --start=45 --end=130
 ### Common Issues
 - **`mpv not found`**: Ensure `mpv` (or `mpv.exe` on Windows) is in your system `PATH`.
 - **GUI fails to open**: Ensure `tkinter` is installed. On some Linux distros, you may need `sudo apt install python3-tk`.
-- **App opens and closes immediately**: The launcher now includes a **Global Error Trap**. If a crash occurs, a message box will appear with a detailed traceback to help diagnose the issue.
+- **App opens and closes immediately**: The launcher now includes a **Global Error Trap** and an **Entry Existence Check**. If the script is missing or a crash occurs, you will receive a clear diagnostic message.
+- **Improved Cleanup**: Closing the launcher (Ctrl+C) now specifically targets the app process, ensuring a clean exit without orphaned `mpv` windows.
 
 ---
 

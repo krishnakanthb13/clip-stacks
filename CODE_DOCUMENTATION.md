@@ -11,7 +11,7 @@ Goal: Stream video highlights using `mpv` timestamps without re-encoding.
 | :--- | :--- |
 | `clip-stacks.py` | Main application script (logic + GUI + CLI). |
 | `launch_clip_stacks.bat` | Windows launcher (detects `py`, `python`, `python3`). |
-| `launch_clip_stacks.sh` | Unix launcher (runs `python3` + `--gui`). |
+| `launch_clip_stacks.sh` | Unix launcher (runs `python3` + SIGINT/SIGTERM process handling). |
 | `README.md` | General overview and usage guide. |
 | `LICENSE` | GPL v3 license text. |
 | `CODE_DOCUMENTATION.md` | Deep dive into codebase (this file). |
@@ -36,10 +36,10 @@ Goal: Stream video highlights using `mpv` timestamps without re-encoding.
 ## 3. Core Modules & Functions
 
 ### Profile Management
-- `load_profile(name)`: Reads JSON from the filesystem with fallback keys for corrupted files.
+- `load_profile(name)`: Reads JSON using UTF-8. Includes **Segment Normalization** (validating video paths, times, and auto-labels) to ensure clean data for the UI engine.
 - `_sanitize_name(name)`: Strips path-traversal characters and handles Windows-reserved file names.
-- `save_profile(name, data)`: Persists profile as formatted JSON safely.
-- `create_segment(...)`: Shared logic to validate timestamps and return a standardized segment dictionary.
+- `save_profile(name, data)`: Persists profile as formatted JSON using **Atomic Writes** (`.tmp` → `os.replace`) to prevent corruption during failures.
+- `create_segment(...)`: Shared logic to validate timestamps (ensuring non-negative times) and return a standardized segment dictionary.
 - `add_segment(...)`: Back-end wrapper for CLI/GUI to create and append segments.
 
 ### Segment Editing
@@ -55,7 +55,8 @@ Goal: Stream video highlights using `mpv` timestamps without re-encoding.
 - `get_video_duration(video_path)`: Async-ready duration fetching via `ffprobe` or `mpv`.
 
 ### Playback Engine
-- `play_profile(profile, start_index)`: Iterates through segments and spawns `mpv` processes sequentially.
+- `play_profile(profile, start_index)`: Iterates through segments starting from `start_index` and spawns `mpv` processes sequentially.
+- `_do_play(start_idx)`: Orchestrates playback from the GUI. It ensures the profile is **automatically saved** (`_save_profile`) before spawning the playback thread.
 
 ---
 
@@ -97,5 +98,5 @@ graph TD
 3.  **IO**: File data is loaded from `Path.home() / ".clip-stacks" / "profiles"`.
 4.  **Edit Loop**: GUI maintains an `_edit_index` to toggle between adding new segments and updating selected ones.
 5.  **Playback**: Each segment triggers a synchronous `subprocess.run([mpv, ...])` call. In GUI mode, this runs in a **background thread** to keep the interface responsive.
-6.  **Error Handling**: A **Global Error Trap** in the entry point catches fatal exceptions, showing a documented traceback to prevent silent crashes.
-7.  **Termination**: `mpv` exit codes are monitored (e.g. `4` for user-quit).
+6.  **Error Handling**: A **Global Error Trap** in the entry point catches fatal exceptions. Support scripts like `launch_clip_stacks.sh` also perform **App Entry Checks** before launching.
+7.  **Termination**: `mpv` exit codes are monitored (e.g. `4` for user-quit). The bash launcher now traps **SIGINT** and **SIGTERM** to specifically kill the app process (`APP_PID`), preventing orphaned player instances.

@@ -42,8 +42,10 @@ Reviewing specific video clips (e.g. lecture notes, game highlights, or raw foot
 - **Iterative Refinement**: Highlighting is an art. Users can now "Edit" segments to fine-tune start/end points without deleting and re-adding.
 
 ### Resilience
-- **Input Sanitization**: Profiles are bullet-proofed against path traversal and OS-reserved names.
+- **Data Integrity (Atomic Writes)**: Profiles are saved using `.tmp` buffers + `os.replace` to ensure zero corruption if the system crashes or power fails during a save.
+- **Normalization & Fault Tolerance**: `load_profile` now validates every segment, auto-fixing missing labels and skipping invalid data. If your profile is slightly corrupted, the app cleans it up rather than crashing.
 - **Global Error Trapping**: No silent failures — any startup crash is intercepted and reported with a detailed traceback.
+- **Clean Process Management**: Support scripts specifically track the app process to ensure that interrupted runs clean up all resources (like the Python interpreter) gracefully.
 
 ### Flexibility
 -   **GUI + CLI**: Professionals can script with the CLI; casual users can browse with the GUI.
